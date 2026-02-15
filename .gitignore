@@ -1,0 +1,20 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+package-lock.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Temp files
+*.log
+*.tmp
+
+# fenxiang-skills (GitLab 暂不可达，待恢复后用 git submodule add 添加)
+fenxiang-skills/

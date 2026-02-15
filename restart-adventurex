@@ -1,0 +1,141 @@
+#!/bin/bash
+
+set -e  # 出错即退出
+echo "🚀 开始更新 adventurex 项目..."
+
+# 1. 拉取代码
+echo "📦 拉取最新代码..."
+cd /usr/local/www/adventurex-docker/adventurex
+pull_result=$(git pull)
+echo "$pull_result"
+
+# 2. 回到 docker 根目录
+cd /usr/local/www/adventurex-docker
+
+# 获取容器状态
+adventurex_status=$(docker inspect -f '{{.State.Status}}' adventurex 2>/dev/null || echo "not_found")
+adventurex2_status=$(docker inspect -f '{{.State.Status}}' adventurex2 2>/dev/null || echo "not_found")
+
+echo "当前容器状态：adventurex=$adventurex_status, adventurex2=$adventurex2_status"
+
+# 编译构建,builder放到代码有更新的逻辑里
+#echo "🔧 执行 builder 构建..."
+#docker-compose run --rm builder
+
+# 3. 设置构建决策逻辑
+UP_FLAGS="-d"
+if [[ "$pull_result" == *"Already up to date"* ]]; then
+    echo "✅ 代码已经是最新，将跳过 Maven 编译(builder)并直接启动现有镜像。"
+else
+    echo "🔧 检测到代码更新，正在执行 builder 容器进行打包..."
+    # 只有代码变了才运行这个临时容器产出新的 .jar
+    docker-compose run --rm builder
+    # 标记后续启动时需要通过 Dockerfile 重新封装镜像
+    UP_FLAGS="--build -d"
+fi
+
+# 启动目标容器，并健康检查成功后再停止旧容器
+if [[ "$adventurex_status" == "running" ]]; then
+  echo "🔁 adventurex 正在运行，准备切换到 adventurex2"
+
+  docker-compose stop adventurex2 || true
+  docker-compose rm -f adventurex2 || true
+
+  echo "🚀 启动 adventurex2..."
+  docker-compose up $UP_FLAGS adventurex2
+
+  echo "🩺 检查 adventurex2 健康状态..."
+  HEALTH_URL="http://127.0.0.1:8084/adventurex/ops/healthCheck"
+
+  set +e
+  for i in {1..100}; do
+      response=$(curl -s --location --request GET "$HEALTH_URL" || true)
+      code=$(echo "$response" | grep -o '"code":[[:space:]]*200')
+      echo "$code"
+      if [[ -n "$code" ]]; then
+	  echo "🔄 更新 Nginx 路由到 adventurex..."
+          echo "set \$backend_host 127.0.0.1:8084;" > /usr/local/nginx/conf/active_adventurex.conf
+
+          echo "🔁 重载 Nginx 配置..."
+          nginx -s reload
+          
+	  response=$(curl -s --location --request GET "http://127.0.0.1:81/adventurex/ops/healthCheck" || true)
+          code=$(echo "$response" | grep -o '"code":[[:space:]]*200')
+          echo "$code"
+
+          if [[ -n "$code" ]]; then
+            echo "✅ adventurex2 服务已健康启动，准备停止旧容器 adventurex（等待 60 秒以完成任务）"
+    	    sleep 60
+    	    echo "⛔️ 停止 adventurex 容器..."
+	    docker-compose stop adventurex
+            docker-compose rm -f adventurex
+	  fi
+	  break
+      fi
+      echo "⏳ 第 $i 次健康检查未通过，3 秒后重试..."
+      sleep 3
+  done
+  set -e
+
+  if [[ -z "$code" ]]; then
+      echo "❌ 健康检查失败：adventurex2 未成功启动！"
+      exit 1
+  fi
+
+elif [[ "$adventurex2_status" == "running" ]]; then
+  echo "🔁 adventurex2 正在运行，准备切换到 adventurex"
+
+  docker-compose stop adventurex || true
+  docker-compose rm -f adventurex || true
+
+  echo "🚀 启动 adventurex..."
+  docker-compose up $UP_FLAGS adventurex
+
+  echo "🩺 检查 adventurex 健康状态..."
+  HEALTH_URL="http://127.0.0.1:8083/adventurex/ops/healthCheck"
+
+  set +e
+  for i in {1..100}; do
+      response=$(curl -s --location --request GET "$HEALTH_URL" || true)
+      code=$(echo "$response" | grep -o '"code":[[:space:]]*200')
+      echo "$code"
+      if [[ -n "$code" ]]; then
+          echo "🔄 更新 Nginx 路由到 adventurex..."
+	  echo "set \$backend_host 127.0.0.1:8083;" > /usr/local/nginx/conf/active_adventurex.conf
+	  
+	  echo "🔁 重载 Nginx 配置..."
+	  nginx -s reload
+	  
+          response=$(curl -s --location --request GET "http://127.0.0.1:81/adventurex/ops/healthCheck" || true)
+          code=$(echo "$response" | grep -o '"code":[[:space:]]*200')
+          echo "$code"
+          
+	  if [[ -n "$code" ]]; then
+            echo "✅ adventurex 服务已健康启动，准备停止旧容器 adventurex2（等待 60 秒以完成任务）"
+            sleep 60
+            echo "⛔️ 停止 adventurex2 容器..."
+	    docker-compose stop adventurex2 || true
+            docker-compose rm -f adventurex2 || true
+	  fi
+          break
+      fi
+      echo "⏳ 第 $i 次健康检查未通过，3 秒后重试..."
+      sleep 3
+  done
+  set -e
+
+  if [[ -z "$code" ]]; then
+      echo "❌ 健康检查失败：adventurex 未成功启动！"
+      exit 1
+  fi
+
+else
+  echo "⚠️ 没有容器在运行，默认启动 adventurex"
+  docker-compose up $UP_FLAGS adventurex
+fi
+
+# 清理无用的 Docker 镜像
+echo "🧹 清理无用的 Docker 镜像..."
+docker image prune -f
+
+echo "✅ 更新完成！"

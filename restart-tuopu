@@ -1,0 +1,135 @@
+#!/bin/bash
+
+set -e  # 出错即退出
+echo "🚀 开始更新 tuopu 项目..."
+
+# 1. 拉取代码
+echo "📦 拉取最新代码..."
+cd /usr/local/www/tuopu-docker/tuopu
+pull_result=$(git pull)
+echo "$pull_result"
+
+# 2. 回到 docker 根目录
+cd /usr/local/www/tuopu-docker
+
+# 获取容器状态
+tuopu_status=$(docker inspect -f '{{.State.Status}}' tuopu 2>/dev/null || echo "not_found")
+tuopu2_status=$(docker inspect -f '{{.State.Status}}' tuopu2 2>/dev/null || echo "not_found")
+
+echo "当前容器状态：tuopu=$tuopu_status, tuopu2=$tuopu2_status"
+
+# 设置构建决策逻辑
+UP_FLAGS="-d"
+if [[ "$pull_result" == *"Already up to date"* ]]; then
+    echo "✅ 代码已经是最新，将跳过 Maven 编译(builder)并直接启动现有镜像。"
+else
+    echo "🔧 检测到代码更新，正在执行 builder 容器进行打包..."
+    docker-compose run --rm builder
+    UP_FLAGS="--build -d"
+fi
+
+# 启动目标容器，并健康检查成功后再停止旧容器
+if [[ "$tuopu_status" == "running" ]]; then
+  echo "🔁 tuopu 正在运行，准备切换到 tuopu2"
+
+  docker-compose stop tuopu2 || true
+  docker-compose rm -f tuopu2 || true
+
+  echo "🚀 启动 tuopu2..."
+  docker-compose up $UP_FLAGS tuopu2
+
+  echo "🩺 检查 tuopu2 健康状态..."
+  HEALTH_URL="http://127.0.0.1:8082/tuopu/ops/healthCheck"
+
+  set +e
+  for i in {1..100}; do
+      response=$(curl -s --location --request GET "$HEALTH_URL" || true)
+      code=$(echo "$response" | grep -o '"code":[[:space:]]*200')
+      echo "$code"
+      if [[ -n "$code" ]]; then
+	  echo "🔄 更新 Nginx 路由到 tuopu..."
+          echo "proxy_pass http://127.0.0.1:8082/tuopu/;" > /usr/local/nginx/conf/active_tuopu.conf
+
+          echo "🔁 重载 Nginx 配置..."
+          nginx -s reload
+          
+	  response=$(curl -s --location --request GET "http://127.0.0.1:80/tuopu/ops/healthCheck" || true)
+          code=$(echo "$response" | grep -o '"code":[[:space:]]*200')
+          echo "$code"
+
+          if [[ -n "$code" ]]; then
+            echo "✅ tuopu2 服务已健康启动，准备停止旧容器 tuopu（等待 60 秒以完成任务）"
+    	    sleep 60
+    	    echo "⛔️ 停止 tuopu 容器..."
+	    docker-compose stop tuopu
+            docker-compose rm -f tuopu
+	  fi
+	  break
+      fi
+      echo "⏳ 第 $i 次健康检查未通过，3 秒后重试..."
+      sleep 3
+  done
+  set -e
+
+  if [[ -z "$code" ]]; then
+      echo "❌ 健康检查失败：tuopu2 未成功启动！"
+      exit 1
+  fi
+
+elif [[ "$tuopu2_status" == "running" ]]; then
+  echo "🔁 tuopu2 正在运行，准备切换到 tuopu"
+
+  docker-compose stop tuopu || true
+  docker-compose rm -f tuopu || true
+
+  echo "🚀 启动 tuopu..."
+  docker-compose up $UP_FLAGS tuopu
+
+  echo "🩺 检查 tuopu 健康状态..."
+  HEALTH_URL="http://127.0.0.1:8081/tuopu/ops/healthCheck"
+
+  set +e
+  for i in {1..100}; do
+      response=$(curl -s --location --request GET "$HEALTH_URL" || true)
+      code=$(echo "$response" | grep -o '"code":[[:space:]]*200')
+      echo "$code"
+      if [[ -n "$code" ]]; then
+          echo "🔄 更新 Nginx 路由到 tuopu..."
+	  echo "proxy_pass http://127.0.0.1:8081/tuopu/;" > /usr/local/nginx/conf/active_tuopu.conf
+	  
+	  echo "🔁 重载 Nginx 配置..."
+	  nginx -s reload
+	  
+          response=$(curl -s --location --request GET "http://127.0.0.1:80/tuopu/ops/healthCheck" || true)
+          code=$(echo "$response" | grep -o '"code":[[:space:]]*200')
+          echo "$code"
+          
+	  if [[ -n "$code" ]]; then
+            echo "✅ tuopu 服务已健康启动，准备停止旧容器 tuopu2（等待 60 秒以完成任务）"
+            sleep 60
+            echo "⛔️ 停止 tuopu2 容器..."
+	    docker-compose stop tuopu2 || true
+            docker-compose rm -f tuopu2 || true
+	  fi
+          break
+      fi
+      echo "⏳ 第 $i 次健康检查未通过，3 秒后重试..."
+      sleep 3
+  done
+  set -e
+
+  if [[ -z "$code" ]]; then
+      echo "❌ 健康检查失败：tuopu 未成功启动！"
+      exit 1
+  fi
+
+else
+  echo "⚠️ 没有容器在运行，默认启动 tuopu"
+  docker-compose up $UP_FLAGS tuopu
+fi
+
+# 清理无用的 Docker 镜像
+echo "🧹 清理无用的 Docker 镜像..."
+docker image prune -f
+
+echo "✅ 更新完成！"

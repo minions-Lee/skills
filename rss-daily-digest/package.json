@@ -1,0 +1,25 @@
+{
+  "name": "rss-daily-digest",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "parse": "tsx scripts/parse-feeds.ts",
+    "fetch": "tsx scripts/fetch-feeds.ts",
+    "filter": "tsx scripts/dedupe-filter.ts",
+    "format": "tsx scripts/format-report.ts",
+    "notify": "tsx scripts/notify-dingtalk.ts",
+    "summarize": "tsx scripts/summarize-standalone.ts",
+    "pipeline": "npm run parse && npm run fetch && npm run filter && npm run summarize && npm run format && npm run notify"
+  },
+  "dependencies": {
+    "tsx": "^4.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.0"
+  }
+}

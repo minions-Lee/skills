@@ -1,0 +1,40 @@
+[submodule "ai-dev-standards"]
+	path = ai-dev-standards
+	url = https://github.com/daffy0208/ai-dev-standards.git
+	branch = main
+[submodule "find-skill"]
+	path = find-skill
+	url = https://github.com/vercel-labs/skills.git
+	branch = main
+[submodule "notebooklm-skill"]
+	path = notebooklm-skill
+	url = https://github.com/PleasePrompto/notebooklm-skill
+	branch = master
+[submodule "onewave-ai-claude-skills"]
+	path = onewave-ai-claude-skills
+	url = https://github.com/onewave-ai/claude-skills.git
+	branch = main
+[submodule "planning-with-files"]
+	path = planning-with-files
+	url = https://github.com/OthmanAdi/planning-with-files
+	branch = master
+[submodule "prd-taskmaster"]
+	path = prd-taskmaster
+	url = https://github.com/anombyte93/prd-taskmaster.git
+	branch = master
+[submodule "SkillFiveSonRide_skills"]
+	path = SkillFiveSonRide_skills
+	url = git@github.com:SkillFiveSonRide/SkillFiveSonRide_skills.git
+	branch = master
+[submodule "skills"]
+	path = skills
+	url = https://github.com/anthropics/skills.git
+	branch = main
+[submodule "style-extractor"]
+	path = style-extractor
+	url = git@github.com:Lucent-Snow/style-extractor.git
+	branch = main
+[submodule "superpowers"]
+	path = superpowers
+	url = https://github.com/obra/superpowers.git
+	branch = main

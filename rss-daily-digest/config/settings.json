@@ -1,0 +1,28 @@
+{
+  "fetch": {
+    "concurrency": 25,
+    "timeoutMs": 15000,
+    "retries": 2,
+    "retryDelayMs": 2000,
+    "userAgent": "ai-digest-bot/1.0"
+  },
+  "filter": {
+    "timeWindowHours": 48,
+    "dedupeStoreMaxDays": 30
+  },
+  "output": {
+    "archiveDir": "~/Documents/ai-digest-archive",
+    "filenamePattern": "YYYY-MM-DD-ai-digest.md",
+    "maxSmartRecommendations": 10
+  },
+  "dingtalk": {
+    "enabled": true,
+    "webhookUrlEnvVar": "DINGTALK_WEBHOOK_URL",
+    "secretEnvVar": "DINGTALK_SECRET"
+  },
+  "summarization": {
+    "model": "claude-sonnet-4-20250514",
+    "batchSize": 40
+  },
+  "feedsSource": "/Users/eamanc/Documents/pe/prompt/claude-code-docs-crawler/rss-feeds.md"
+}

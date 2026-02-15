@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.pe.rss-daily-digest</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/eamanc/Documents/pe/skills/rss-daily-digest/scripts/run.sh</string>
+        <string>pipeline</string>
+    </array>
+
+    <!-- Run daily at 07:30 -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>7</integer>
+        <key>Minute</key>
+        <integer>30</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/eamanc/Documents/pe/skills/rss-daily-digest/data/launchd-stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/eamanc/Documents/pe/skills/rss-daily-digest/data/launchd-stderr.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+        <!-- Set these in the plist or via launchctl setenv -->
+        <!-- <key>ANTHROPIC_API_KEY</key><string>sk-ant-...</string> -->
+        <!-- <key>DINGTALK_WEBHOOK_URL</key><string>https://oapi.dingtalk.com/robot/send?access_token=...</string> -->
+    </dict>
+
+
+</dict>
+</plist>
