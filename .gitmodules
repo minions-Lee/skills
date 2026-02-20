@@ -38,3 +38,6 @@
 	path = superpowers
 	url = https://github.com/obra/superpowers.git
 	branch = main
+[submodule "github-kb"]
+	path = github-kb
+	url = https://github.com/goodniuniu/github-kb.git
