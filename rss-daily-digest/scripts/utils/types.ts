@@ -81,6 +81,8 @@ export interface SummarizedOutput {
   summarizedAt: string
   totalItems: number
   smartPickCount: number
+  podcastTop5?: SummarizedItem[]
+  blogTop5?: SummarizedItem[]
   items: SummarizedItem[]
 }
 

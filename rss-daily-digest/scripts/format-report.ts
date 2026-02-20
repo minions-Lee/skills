@@ -56,6 +56,8 @@ interface ReportData {
   totalSources: number
   totalItems: number
   smartPicks: SummarizedItem[]
+  podcastTop5?: SummarizedItem[]
+  blogTop5?: SummarizedItem[]
   categorizedItems: Map<string, Array<SummarizedItem | FeedItem>>
   hasSummaries: boolean
 }
@@ -84,6 +86,8 @@ function loadReportData(_settings: Settings): ReportData {
       totalSources: new Set(data.items.map(i => i.source)).size,
       totalItems: data.totalItems,
       smartPicks,
+      podcastTop5: data.podcastTop5,
+      blogTop5: data.blogTop5,
       categorizedItems: categorized as Map<string, Array<SummarizedItem | FeedItem>>,
       hasSummaries: true,
     }
@@ -146,6 +150,42 @@ function generateReport(data: ReportData): string {
       lines.push(item.summary)
       lines.push("")
       lines.push(`[阅读原文](${item.link})`)
+      lines.push("")
+    }
+  }
+
+  // Podcast Top 5
+  if (data.podcastTop5 && data.podcastTop5.length > 0) {
+    const podcastTop = data.podcastTop5
+    lines.push("## 播客精选 Top 5")
+    lines.push("")
+    for (let i = 0; i < podcastTop.length; i++) {
+      const item = podcastTop[i]!
+      lines.push(`### ${i + 1}. ${item.title}`)
+      lines.push("")
+      lines.push(`**${item.source}** | ${item.categoryName}`)
+      lines.push("")
+      lines.push(item.summary)
+      lines.push("")
+      if (item.link) lines.push(`[阅读原文](${item.link})`)
+      lines.push("")
+    }
+  }
+
+  // Blog Top 5
+  if (data.blogTop5 && data.blogTop5.length > 0) {
+    const blogTop = data.blogTop5
+    lines.push("## Blog 精选 Top 5")
+    lines.push("")
+    for (let i = 0; i < blogTop.length; i++) {
+      const item = blogTop[i]!
+      lines.push(`### ${i + 1}. ${item.title}`)
+      lines.push("")
+      lines.push(`**${item.source}** | ${item.categoryName}`)
+      lines.push("")
+      lines.push(item.summary)
+      lines.push("")
+      if (item.link) lines.push(`[阅读原文](${item.link})`)
       lines.push("")
     }
   }

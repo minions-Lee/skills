@@ -1,0 +1,83 @@
+{
+  "source": "Headspace (iOS + Web)",
+  "platform": "Mobile (React Native)",
+  "techStack": "React Native",
+  "precision": "medium (Claude Vision visual analysis)",
+  "colors": {
+    "bg": "#FFFFFF",
+    "bgWarm": "#F9F4F2",
+    "bgMuted": "#F5F2ED",
+    "surface": "#FFFFFF",
+    "surfaceHover": "#F5F2ED",
+    "surfaceActive": "#EDE8E3",
+    "surfaceSelected": "#2D2C2B",
+    "border": "#E2DED9",
+    "borderSubtle": "#EEEBE7",
+    "text": "#2D2C2B",
+    "textSecondary": "#6B6560",
+    "textMuted": "#A09A94",
+    "textOnDark": "#FFFFFF",
+    "textOnSelected": "#FFFFFF",
+    "accent": "#0061EF",
+    "accentLight": "#E8F0FD",
+    "accentWarm": "#F47D31",
+    "accentWarmLight": "#FEF0E5",
+    "immersiveBg": "#2B1A5E",
+    "immersiveAccent": "#6B4FA0",
+    "success": "#2EAD6B",
+    "successLight": "#E6F7EF",
+    "warning": "#F5A623",
+    "warningLight": "#FEF5E5",
+    "danger": "#E5484D",
+    "dangerLight": "#FEE8E8"
+  },
+  "typography": {
+    "fontFamily": {
+      "heading": "DM Sans",
+      "body": "Inter",
+      "fallback": "System"
+    },
+    "h1": { "size": 32, "weight": "700", "lineHeight": 1.2, "letterSpacing": -0.5 },
+    "h2": { "size": 24, "weight": "700", "lineHeight": 1.25, "letterSpacing": -0.3 },
+    "h3": { "size": 20, "weight": "600", "lineHeight": 1.3, "letterSpacing": -0.2 },
+    "bodyLarge": { "size": 17, "weight": "400", "lineHeight": 1.5, "letterSpacing": 0 },
+    "body": { "size": 15, "weight": "400", "lineHeight": 1.5, "letterSpacing": 0 },
+    "bodyMedium": { "size": 15, "weight": "500", "lineHeight": 1.5, "letterSpacing": 0 },
+    "caption": { "size": 13, "weight": "400", "lineHeight": 1.4, "letterSpacing": 0.1 },
+    "captionMedium": { "size": 13, "weight": "500", "lineHeight": 1.4, "letterSpacing": 0.1 },
+    "label": { "size": 12, "weight": "600", "lineHeight": 1.3, "letterSpacing": 0.5 },
+    "overline": { "size": 11, "weight": "600", "lineHeight": 1.3, "letterSpacing": 1.5 }
+  },
+  "spacing": {
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "base": 16,
+    "lg": 20,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48,
+    "4xl": 64,
+    "screenPadding": 24
+  },
+  "radius": {
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 20,
+    "pill": 999
+  },
+  "shadows": {
+    "sm": { "offset": [0, 1], "blur": 3, "color": "rgba(0,0,0,0.06)" },
+    "md": { "offset": [0, 4], "blur": 12, "color": "rgba(0,0,0,0.08)" },
+    "lg": { "offset": [0, 8], "blur": 24, "color": "rgba(0,0,0,0.10)" }
+  },
+  "animation": {
+    "duration": {
+      "fast": 150,
+      "normal": 250,
+      "slow": 400
+    },
+    "easing": "cubic-bezier(0.4, 0, 0.2, 1)"
+  }
+}

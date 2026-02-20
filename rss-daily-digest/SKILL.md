@@ -77,12 +77,38 @@ npx tsx scripts/dedupe-filter.ts CATEGORY_FLAG    # 去重过滤 → data/filter
 5. 从所有条目中选出最多 10 条 Smart Recommendations（最有价值/影响力的内容）
 6. 为 Smart Recommendations 写更详细的摘要（3-5 句）
 
-**Smart Recommendations 选择标准：**
-- 重大产品发布或更新（如新模型、重大功能）
-- 有影响力的研究成果
-- 行业趋势和深度分析
-- AI 从业者深度访谈
-- 重要的开源项目发布
+**Smart Recommendations 评分体系：**
+
+对每个条目按 4 个维度打分（1-5 分），加权计算总分，取 Top 10。
+
+| 维度 | 权重 | 5 分 | 4 分 | 3 分 | 2 分 | 1 分 |
+|------|------|------|------|------|------|------|
+| **应用相关性** | 35% | 核心工具链更新（Claude Code, Codex, Cursor, Copilot, Windsurf） | 直接相关（LLM API 更新, AI Agent 框架, 图像模型） | 间接相关（部署工具, 向量数据库, 云服务） | 泛 AI 应用新闻 | 纯学术/一般科技新闻 |
+| **信息源质量** | 25% | 官方博客/Changelog/创始人亲写 | GitHub Release/README | 独立开发者深度体验 | 独立媒体原创报道 | 营销号/二次转述 |
+| **内容价值类型** | 25% | 新产品/功能首发、开源项目创新首发 | 模型更新/重大版本发布 | 深度技术实践/教程/最佳实践 | 行业趋势分析/融资新闻 | 二手总结/泛泛概述 |
+| **可操作性** | 15% | 现在就能用/集成到项目 | 短期内可以尝试 | 值得收藏/关注后续 | 了解即可 | 与工作无直接关系 |
+
+**计算公式：** 总分 = 应用相关性×0.35 + 信息源质量×0.25 + 内容价值类型×0.25 + 可操作性×0.15
+
+**降权规则：**
+- **衍生跟进类内容大幅降权**：当 A 公司发布了新模型/功能后，B/C/D 说"我们也支持了"属于衍生消息（如"Copilot 支持 Sonnet 4.6"、"SDK 新增 XX 模型支持"、"XX 平台已接入"），这类内容的「内容价值类型」最高 2 分。只有**原始发布方的首发公告**才算 5 分
+- 同理，媒体对官方发布的转述/解读也属于衍生内容，不应占据 Top 10
+
+**硬约束：**
+- Top 10 中 arXiv 论文**最多 1 篇**（仅保留真正突破性的、能影响应用层的论文）
+- 同一产品/公司的内容最多 2 条
+- **衍生跟进内容不进 Top 10**（第三方适配/支持公告、媒体转述官方发布）
+
+**用户画像（评分参考）：**
+- 身份：AI 应用开发者 + 全栈 + 后端
+- 核心工具：Claude Code（最常用）、Codex、Cursor、Copilot、Windsurf
+- 关注领域：LLM API、AI 编程/生成工具、图像模型、AI Agent 创新、部署基础设施
+- 信息偏好：一手信息 > 技术原理 > 二手媒体。优先关注能直接用的、有交互创新的内容
+
+**分类 Top 榜单：**
+- **播客 Top 5**：仅从 `podcasts` 分类中按总分排序取 Top 5
+- **Blog Top 5**：从 `tech-blogs` + `ai-company-blogs` + `ai-developers` 分类中按总分排序取 Top 5
+- 分类 Top 与全局 Top 10 可以重叠（同一条可以同时出现在两个榜单）
 
 **输出格式：** 将结果写入 `data/summarized-items.json`
 
@@ -91,6 +117,8 @@ npx tsx scripts/dedupe-filter.ts CATEGORY_FLAG    # 去重过滤 → data/filter
   "summarizedAt": "ISO timestamp",
   "totalItems": 139,
   "smartPickCount": 10,
+  "podcastTop5": [{ "title": "...", "smartPickRank": 1, "scores": {...}, ... }],
+  "blogTop5": [{ "title": "...", "smartPickRank": 1, "scores": {...}, ... }],
   "items": [
     {
       "title": "原标题",
@@ -114,7 +142,7 @@ cd ~/Documents/pe/skills/rss-daily-digest
 npx tsx scripts/format-report.ts
 ```
 
-报告输出到：`~/Documents/ai-digest-archive/YYYY-MM-DD-ai-digest.md`
+报告输出到：`~/Documents/pe/jixiaxuegong/ai-digest-archive/YYYY-MM-DD-ai-digest.md`
 
 ### Step 4: 钉钉通知（可选）
 
@@ -159,3 +187,32 @@ Feed 来源: `rss-feeds.md` (由 `config/settings.json` 中 `feedsSource` 指定
 | `data/seen-guids.json` | 去重 GUID 持久存储 |
 | `data/feed-health.json` | Feed 健康度追踪 |
 | `data/latest-report.md` | 最新报告副本 |
+
+## 自动化执行
+
+### 定时任务（launchd）
+
+每日 08:00 自动执行完整 pipeline：
+
+```bash
+# 安装
+cp config/com.pe.rss-daily-digest.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.pe.rss-daily-digest.plist
+
+# 查看状态
+launchctl list | grep rss-daily-digest
+
+# 手动触发
+./scripts/run.sh pipeline
+
+# 卸载
+launchctl unload ~/Library/LaunchAgents/com.pe.rss-daily-digest.plist
+```
+
+### 命令行执行
+
+```bash
+./scripts/run.sh pipeline           # 完整 pipeline（用 Claude CLI 做摘要）
+./scripts/run.sh summarize-claude   # 仅用 Claude CLI 做摘要+评分
+./scripts/run.sh summarize          # 仅用 Anthropic API 做摘要（需要 ANTHROPIC_API_KEY）
+```

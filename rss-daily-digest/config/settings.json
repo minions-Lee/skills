@@ -11,7 +11,7 @@
     "dedupeStoreMaxDays": 30
   },
   "output": {
-    "archiveDir": "~/Documents/ai-digest-archive",
+    "archiveDir": "~/Documents/pe/jixiaxuegong/ai-digest-archive",
     "filenamePattern": "YYYY-MM-DD-ai-digest.md",
     "maxSmartRecommendations": 10
   },

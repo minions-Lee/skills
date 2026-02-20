@@ -7,34 +7,41 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/bin/bash</string>
-        <string>/Users/eamanc/Documents/pe/skills/rss-daily-digest/scripts/run.sh</string>
-        <string>pipeline</string>
+        <string>/Users/eamanc/.nvm/versions/node/v24.7.0/bin/node</string>
+        <string>/Users/eamanc/Documents/pe/skills/rss-daily-digest/scripts/run-launcher.cjs</string>
     </array>
 
-    <!-- Run daily at 07:30 -->
+    <key>WorkingDirectory</key>
+    <string>/Users/eamanc/Documents/pe/jixiaxuegong/ai-digest-archive</string>
+
+    <!-- Run daily at 08:00 -->
     <key>StartCalendarInterval</key>
     <dict>
         <key>Hour</key>
-        <integer>7</integer>
+        <integer>8</integer>
         <key>Minute</key>
-        <integer>30</integer>
+        <integer>0</integer>
     </dict>
 
     <key>StandardOutPath</key>
-    <string>/Users/eamanc/Documents/pe/skills/rss-daily-digest/data/launchd-stdout.log</string>
+    <string>/Users/eamanc/Library/Logs/rss-daily-digest/stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/eamanc/Documents/pe/skills/rss-daily-digest/data/launchd-stderr.log</string>
+    <string>/Users/eamanc/Library/Logs/rss-daily-digest/stderr.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
-        <!-- Set these in the plist or via launchctl setenv -->
-        <!-- <key>ANTHROPIC_API_KEY</key><string>sk-ant-...</string> -->
-        <!-- <key>DINGTALK_WEBHOOK_URL</key><string>https://oapi.dingtalk.com/robot/send?access_token=...</string> -->
+        <string>/Users/eamanc/.nvm/versions/node/v24.7.0/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>HOME</key>
+        <string>/Users/eamanc</string>
+        <key>https_proxy</key>
+        <string>http://127.0.0.1:7998</string>
+        <key>http_proxy</key>
+        <string>http://127.0.0.1:7998</string>
+        <key>ANTHROPIC_BASE_URL</key>
+        <string>http://154.36.129.51:3000/api</string>
+        <key>ANTHROPIC_AUTH_TOKEN</key>
+        <string>cr_5e8e08542b562ac4aa57d4df3cc8e64a4c008c37b45167c3fa077615195af66c</string>
     </dict>
-
-
 </dict>
 </plist>

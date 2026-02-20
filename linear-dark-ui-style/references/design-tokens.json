@@ -1,0 +1,76 @@
+{
+  "source": "Linear Web",
+  "platform": "Web / Desktop",
+  "techStack": "React + Tailwind CSS",
+  "precision": "medium (Claude Vision 视觉估算，Codia API 额度用完)",
+  "extractedFrom": "10 张 Mobbin 截图，2026-02-19",
+  "colors": {
+    "bg": "#1B1C1F",
+    "surface": "#18191C",
+    "surfaceHover": "#232428",
+    "surfaceActive": "#2B2D31",
+    "surfaceRaised": "#2F3035",
+    "border": "#2E3035",
+    "borderSubtle": "#252629",
+    "text": "#EDEDEF",
+    "textSecondary": "#9B9CA0",
+    "textMuted": "#5E5F63",
+    "accent": "#5E6AD2",
+    "accentHover": "#6E7AE2",
+    "success": "#4CB782",
+    "warning": "#F2994A",
+    "danger": "#EB5757",
+    "info": "#5E6AD2"
+  },
+  "statusColors": {
+    "inProgress": "#F2994A",
+    "todo": "#9B9CA0",
+    "backlog": "#5E5F63",
+    "done": "#4CB782",
+    "cancelled": "#EB5757"
+  },
+  "priorityColors": {
+    "urgent": "#EB5757",
+    "high": "#F2994A",
+    "medium": "#F2C94C",
+    "low": "#5E6AD2",
+    "none": "#5E5F63"
+  },
+  "typography": {
+    "fontFamily": "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', sans-serif",
+    "heading": { "size": "14px", "weight": 600, "lineHeight": 1.4, "letterSpacing": "-0.01em" },
+    "body": { "size": "13px", "weight": 400, "lineHeight": 1.5, "letterSpacing": "-0.01em" },
+    "bodyMedium": { "size": "13px", "weight": 500, "lineHeight": 1.5, "letterSpacing": "-0.01em" },
+    "small": { "size": "12px", "weight": 400, "lineHeight": 1.4, "letterSpacing": "0" },
+    "label": { "size": "11px", "weight": 500, "lineHeight": 1.3, "letterSpacing": "0.03em", "textTransform": "uppercase" }
+  },
+  "spacing": {
+    "xs": "4px",
+    "sm": "6px",
+    "md": "8px",
+    "lg": "12px",
+    "xl": "16px",
+    "2xl": "20px",
+    "3xl": "24px"
+  },
+  "radius": {
+    "sm": "4px",
+    "md": "6px",
+    "lg": "8px",
+    "xl": "12px"
+  },
+  "layout": {
+    "sidebarWidth": "210px",
+    "sidebarWidthCollapsed": "48px",
+    "detailPanelWidth": "360px",
+    "titleBarHeight": "38px",
+    "navItemHeight": "30px",
+    "listRowHeight": "42px",
+    "groupHeaderHeight": "36px"
+  },
+  "transitions": {
+    "fast": "100ms ease",
+    "default": "150ms ease",
+    "slow": "200ms ease"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://154.36.129.51:3000/api",
+    "ANTHROPIC_AUTH_TOKEN": "cr_5e8e08542b562ac4aa57d4df3cc8e64a4c008c37b45167c3fa077615195af66c"
+  }
+}

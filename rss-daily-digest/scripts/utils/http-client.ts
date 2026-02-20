@@ -1,7 +1,11 @@
 /**
  * HTTP client with retry, timeout, and optional proxy support.
- * Uses Node.js native fetch (20+).
+ * Uses Node.js native fetch (20+) with undici ProxyAgent when https_proxy is set.
  */
+import { ProxyAgent } from "undici"
+
+const proxyUrl = process.env.https_proxy || process.env.HTTPS_PROXY || process.env.http_proxy || process.env.HTTP_PROXY
+const proxyDispatcher = proxyUrl ? new ProxyAgent(proxyUrl) : undefined
 
 export interface FetchOptions {
   timeoutMs?: number
@@ -42,6 +46,8 @@ export async function fetchUrl(url: string, options: FetchOptions = {}): Promise
         },
         signal: controller.signal,
         redirect: "follow",
+        // @ts-ignore - undici dispatcher for proxy support
+        dispatcher: proxyDispatcher,
       })
 
       clearTimeout(timer)

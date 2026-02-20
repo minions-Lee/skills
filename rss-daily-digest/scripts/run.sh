@@ -13,8 +13,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKILL_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+ARCHIVE_DIR="$(cd "${ARCHIVE_DIR:-$HOME/Documents/pe/jixiaxuegong/ai-digest-archive}" 2>/dev/null && pwd)"
 
 cd "$SKILL_DIR"
+
+# Allow claude CLI to run even if invoked from within a Claude Code session
+unset CLAUDECODE 2>/dev/null || true
 
 run_step() {
   local step="$1"
@@ -43,7 +47,15 @@ case "${1:-help}" in
     run_step "DingTalk Notify" "notify-dingtalk.ts"
     ;;
   summarize)
-    run_step "AI Summarize" "summarize-standalone.ts"
+    run_step "AI Summarize (API)" "summarize-standalone.ts"
+    ;;
+  summarize-claude)
+    echo ""
+    echo "═══════════════════════════════════════"
+    echo "  [AI Summarize via Claude CLI] $(date '+%H:%M:%S')"
+    echo "═══════════════════════════════════════"
+    (cd "$ARCHIVE_DIR" && claude -p "$(cat "$SKILL_DIR/scripts/summarize-prompt.md")" \
+      --allowedTools "Read,Write,Task,Bash,Glob,Grep")
     ;;
   pipeline)
     echo "Starting full pipeline..."
@@ -52,7 +64,14 @@ case "${1:-help}" in
     run_step "1/6 Parse Feeds" "parse-feeds.ts"
     run_step "2/6 Fetch Feeds" "fetch-feeds.ts"
     run_step "3/6 Dedupe & Filter" "dedupe-filter.ts"
-    run_step "4/6 AI Summarize" "summarize-standalone.ts"
+
+    echo ""
+    echo "═══════════════════════════════════════"
+    echo "  [4/6 AI Summarize via Claude CLI] $(date '+%H:%M:%S')"
+    echo "═══════════════════════════════════════"
+    (cd "$ARCHIVE_DIR" && claude -p "$(cat "$SKILL_DIR/scripts/summarize-prompt.md")" \
+      --allowedTools "Read,Write,Task,Bash,Glob,Grep")
+
     run_step "5/6 Format Report" "format-report.ts"
     run_step "6/6 DingTalk Notify" "notify-dingtalk.ts"
 
@@ -74,8 +93,9 @@ case "${1:-help}" in
     echo "  filter     Dedupe + time-window filter"
     echo "  format     Generate Markdown report"
     echo "  notify     Send DingTalk notification"
-    echo "  summarize  AI summarization (Claude API)"
-    echo "  pipeline   Full pipeline (all steps)"
+    echo "  summarize        AI summarization (Claude API, requires ANTHROPIC_API_KEY)"
+    echo "  summarize-claude AI summarization (Claude CLI, requires claude installed)"
+    echo "  pipeline         Full pipeline (all steps, uses Claude CLI)"
     echo ""
     echo "Interactive mode: use /rss-digest in Claude Code"
     ;;

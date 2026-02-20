@@ -34,7 +34,8 @@ async function callClaude(
   messages: ClaudeMessage[],
   systemPrompt: string,
 ): Promise<string> {
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  const baseUrl = (process.env.ANTHROPIC_BASE_URL ?? "https://api.anthropic.com").replace(/\/$/, "")
+  const response = await fetch(`${baseUrl}/v1/messages`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -134,7 +135,7 @@ ${itemsText}
 async function main() {
   const settings = loadSettings()
 
-  const apiKey = process.env.ANTHROPIC_API_KEY
+  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN
   if (!apiKey) {
     console.error("ANTHROPIC_API_KEY environment variable not set.")
     process.exit(1)
