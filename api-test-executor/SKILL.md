@@ -314,8 +314,6 @@ tags: [api-testing, mock, automation, test-execution, quality-assurance]
 | `boundary` | 边界值测试 | 最大长度、最小值、0 |
 | `auth` | 鉴权相关 | 无 token、过期 token、错误 token |
 | `idempotent` | 幂等性测试 | 同一请求重复发送 |
-| `concurrency` | 并发测试 | 同时创建相同资源 |
-| `performance` | 性能基准 | 单接口响应时间阈值 |
 
 ### 4. 环境配置（可选）
 
@@ -624,13 +622,13 @@ OrderController.java → POST /api/v1/orders, GET /api/v1/orders/{id}, PUT /api/
 ```markdown
 ## 接口覆盖矩阵
 
-| 接口 | 正向 | 参数校验 | 鉴权 | 权限 | 幂等 | 并发 | 性能 |
-|------|------|---------|------|------|------|------|------|
-| POST /users/register | ✅ | ✅ | - | - | ✅ | ✅ | ⬜ |
-| POST /users/login | ✅ | ✅ | - | - | ✅ | ⬜ | ⬜ |
-| GET /users/profile | ✅ | - | ✅ | ✅ | - | - | ⬜ |
-| POST /orders | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| DELETE /orders/{id} | ✅ | - | ✅ | ✅ | ✅ | ✅ | ⬜ |
+| 接口 | 正向 | 参数校验 | 鉴权 | 权限 | 幂等 |
+|------|------|---------|------|------|------|
+| POST /users/register | ✅ | ✅ | - | - | ✅ |
+| POST /users/login | ✅ | ✅ | - | - | ✅ |
+| GET /users/profile | ✅ | - | ✅ | ✅ | - |
+| POST /orders | ✅ | ✅ | ✅ | ✅ | ✅ |
+| DELETE /orders/{id} | ✅ | - | ✅ | ✅ | ✅ |
 ```
 
 图例：✅ 已有用例 | ⬜ 待补充 | `-` 不适用
@@ -1243,6 +1241,7 @@ Step 3: 生成测试报告（PASS / FAIL / ERROR / SKIP 四种状态）
 - **环境隔离**：提醒用户确认测试环境，避免误操作生产环境
 - **大文件上传**：如果接口涉及文件上传，使用 `-F "file=@filepath"` 方式
 - **HTTPS 证书**：测试环境自签证书时，使用 `curl -k` 跳过校验
+- **能力边界**：本 skill 是单请求功能测试工具，不支持并发压测和负载测试。如需压测建议使用 wrk / k6 / JMeter
 
 ## 反模式
 
