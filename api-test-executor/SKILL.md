@@ -124,7 +124,199 @@ tags: [api-testing, mock, automation, test-execution, quality-assurance]
   ```
 ```
 
-### 3. 环境配置（可选）
+### 3. Mock 数据模板
+
+当测试数据文档中需要大量 mock 数据时，使用以下模板规范来定义，确保数据一致、可复用、可读性强。
+
+#### 模板格式 A：单用例完整定义（Markdown）
+
+适用于少量用例、每个用例独立描述的场景。
+
+```markdown
+## 用例：{用例编号} - {用例名称}
+
+- 分类：{正向/异常/边界/性能}
+- 接口：{METHOD} {PATH}
+- 请求头：
+  ```
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+  ```
+- Path 参数：
+  ```json
+  { "id": "{{userId}}" }
+  ```
+- Query 参数：
+  ```json
+  { "page": 1, "size": 10 }
+  ```
+- 请求体：
+  ```json
+  {
+    "field1": "value1",
+    "field2": 123,
+    "nested": {
+      "subField": true
+    }
+  }
+  ```
+- 预期状态码：200
+- 预期响应：
+  ```json
+  {
+    "code": 0,
+    "data": {
+      "id": "@isNotEmpty",
+      "field1": "value1",
+      "list": "@lengthGt(0)"
+    }
+  }
+  ```
+- 提取变量：`varName = response.data.xxx`
+- 前置依赖：用例 {N}
+```
+
+#### 模板格式 B：表格批量定义
+
+适用于同一个接口的多组参数校验、边界值测试。表头定义字段，每行是一组 mock 数据。
+
+```markdown
+## 用例组：{接口名称} - {测试目的}
+
+- 接口：{METHOD} {PATH}
+- 公共请求头：
+  ```
+  Authorization: Bearer {{token}}
+  ```
+
+| # | 场景 | 请求体 | 预期状态码 | 预期响应（关键字段） |
+|---|------|--------|-----------|-------------------|
+| 1 | 正常创建 | `{"name":"test","age":25}` | 200 | `{"code":0,"data.id":"@isNotEmpty"}` |
+| 2 | name 为空 | `{"name":"","age":25}` | 400 | `{"code":1001,"message":"@contains(名称)"}` |
+| 3 | age 为负数 | `{"name":"test","age":-1}` | 400 | `{"code":1002}` |
+| 4 | 缺少必填字段 | `{"age":25}` | 400 | `{"code":1001}` |
+| 5 | 超长 name（255+字符） | `{"name":"a]x256...","age":25}` | 400 | `{"code":1003}` |
+```
+
+#### 模板格式 C：JSON 结构化定义
+
+适用于需要程序化处理、或从 Postman/Apifox 导出的场景。
+
+```json
+{
+  "suite": "用户模块接口测试",
+  "baseUrl": "{{BASE_URL}}",
+  "globalHeaders": {
+    "Content-Type": "application/json"
+  },
+  "cases": [
+    {
+      "id": "TC001",
+      "name": "用户注册 - 正常",
+      "category": "positive",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/users/register",
+        "headers": {},
+        "body": {
+          "username": "testuser001",
+          "password": "Test@12345",
+          "email": "test001@example.com"
+        }
+      },
+      "expected": {
+        "status": 201,
+        "body": {
+          "code": 0,
+          "data": {
+            "userId": "@isNotEmpty",
+            "username": "testuser001"
+          }
+        }
+      },
+      "extract": {
+        "userId": "response.data.userId"
+      },
+      "dependsOn": []
+    },
+    {
+      "id": "TC002",
+      "name": "用户登录 - 正常",
+      "category": "positive",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/users/login",
+        "headers": {},
+        "body": {
+          "username": "testuser001",
+          "password": "Test@12345"
+        }
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "code": 0,
+          "data": {
+            "token": "@isNotEmpty"
+          }
+        }
+      },
+      "extract": {
+        "token": "response.data.token"
+      },
+      "dependsOn": ["TC001"]
+    }
+  ]
+}
+```
+
+#### Mock 数据生成规则
+
+当用例中需要动态生成 mock 数据时，可使用以下占位符（在执行前自动替换）：
+
+| 占位符 | 说明 | 示例输出 |
+|--------|------|---------|
+| `@randomString(N)` | N 位随机字母数字串 | `aB3kF9xZ` |
+| `@randomInt(min,max)` | 范围内随机整数 | `42` |
+| `@randomEmail` | 随机邮箱 | `user_a3k9@test.com` |
+| `@randomPhone` | 随机手机号 | `13800138000` |
+| `@randomUUID` | UUID v4 | `550e8400-e29b-41d4-a716-446655440000` |
+| `@timestamp` | 当前时间戳（秒） | `1708502400` |
+| `@timestampMs` | 当前时间戳（毫秒） | `1708502400000` |
+| `@datetime` | 当前时间 ISO 格式 | `2026-02-21T14:30:00Z` |
+| `@date` | 当前日期 | `2026-02-21` |
+| `@randomName` | 随机中文姓名 | `张三` |
+| `@randomIdCard` | 随机身份证号 | `310101199001011234` |
+| `@sequence(prefix,start)` | 自增序列 | `ORDER_001`, `ORDER_002`... |
+| `@fromPool(varName)` | 从变量池取值 | 等同于 `{{varName}}` |
+
+**使用示例**：
+```json
+{
+  "username": "user_@randomString(6)",
+  "email": "@randomEmail",
+  "phone": "@randomPhone",
+  "orderId": "@sequence(ORD,1000)",
+  "createTime": "@datetime",
+  "token": "@fromPool(token)"
+}
+```
+
+#### 用例分类标签
+
+每个用例应标注分类，方便按类型筛选执行：
+
+| 分类 | 说明 | 示例 |
+|------|------|------|
+| `positive` | 正向用例，正常流程 | 正确参数注册成功 |
+| `negative` | 异常用例，错误输入 | 密码为空、格式错误 |
+| `boundary` | 边界值测试 | 最大长度、最小值、0 |
+| `auth` | 鉴权相关 | 无 token、过期 token、错误 token |
+| `idempotent` | 幂等性测试 | 同一请求重复发送 |
+| `concurrency` | 并发测试 | 同时创建相同资源 |
+| `performance` | 性能基准 | 单接口响应时间阈值 |
+
+### 4. 环境配置（可选）
 
 ```markdown
 ## 环境变量
