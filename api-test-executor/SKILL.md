@@ -690,6 +690,91 @@ OrderController.java → POST /api/v1/orders, GET /api/v1/orders/{id}, PUT /api/
 
 ### Step 0: 解析输入与范围选择
 
+#### 0.0 探测接口协议
+
+项目不一定遵循 REST 或 GraphQL 规范，可能是 JSON-RPC、自定义 HTTP、甚至多种混合。在解析接口文档之前，先探测项目使用的协议风格。
+
+**探测信号**：
+
+| 信号来源 | 探测方式 | 判定 |
+|---------|---------|------|
+| **接口文档** | 文档中统一使用 `POST /graphql` + `query`/`mutation` | GraphQL |
+| **接口文档** | 文档中路径多样（`GET /users`、`POST /orders`），方法多样 | REST 风格 |
+| **接口文档** | 文档中统一 `POST /rpc` 或 `POST /api`，Body 含 `method`+`params` | JSON-RPC |
+| **接口文档** | 以上都不匹配，但有路径 + 方法 + 参数 | 自定义 HTTP |
+| **代码扫描** | 项目依赖含 `apollo-server`/`graphql-yoga`/`type-graphql` | GraphQL |
+| **代码扫描** | 项目依赖含 `json-rpc`/`jayson`/`jsonrpclib` | JSON-RPC |
+| **代码扫描** | 项目存在 `.graphql`/`.gql` schema 文件 | GraphQL |
+| **代码扫描** | Controller/Handler 中同时存在多种风格 | 混合模式 |
+
+**各协议的请求构造差异**：
+
+| 协议 | 请求构造 | 成功判定 | 错误判定 |
+|------|---------|---------|---------|
+| **REST** | 按接口定义的 METHOD + PATH + 参数 | HTTP 状态码 2xx | 状态码 4xx/5xx |
+| **GraphQL** | 统一 `POST /graphql`，Body 含 `query`+`variables` | 状态码 200 + `data` 非空 | 状态码 200 + `errors` 数组 |
+| **JSON-RPC** | 统一 `POST`，Body 含 `jsonrpc`+`method`+`params`+`id` | `result` 字段存在 | `error` 字段存在 |
+| **自定义 HTTP** | 按文档定义的路径和方法，不假设任何规范 | 按用例中的预期状态码和响应体判定 | 同左 |
+
+**JSON-RPC 请求示例**：
+
+```bash
+curl -s -X POST \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "user.getProfile",
+    "params": { "userId": "{{userId}}" },
+    "id": 1
+  }' \
+  "${BASE_URL}/rpc"
+```
+
+**JSON-RPC 断言差异**：
+
+| 断言 | 说明 |
+|------|------|
+| `"result.fieldName": "value"` | 成功时校验 `result` 字段 |
+| `"error": "@isNull"` | 正向用例：无错误 |
+| `"error.code": -32600` | 异常用例：匹配错误码 |
+| `"error.message": "@contains(xxx)"` | 异常用例：错误信息包含指定内容 |
+| `"id": 1` | 请求 ID 一致性校验 |
+
+**混合模式处理**：
+
+如果检测到项目同时使用多种协议（如 REST + GraphQL），按接口逐个标记协议类型，构造请求时按各自规则处理：
+
+```
+接口清单：
+  POST /api/v1/users/register     → REST
+  POST /api/v1/users/login        → REST
+  POST /graphql (createOrder)     → GraphQL
+  POST /rpc (payment.process)     → JSON-RPC
+```
+
+**探测结果输出**：
+
+```
+🔍 协议探测结果：
+
+  检测到项目使用 REST 风格接口（47 个）
+  未发现 GraphQL / JSON-RPC 端点
+
+  依据：
+  - 接口路径多样，方法覆盖 GET/POST/PUT/DELETE
+  - 项目依赖未包含 GraphQL 或 JSON-RPC 相关库
+```
+
+或混合场景：
+```
+🔍 协议探测结果：
+
+  REST 接口：35 个
+  GraphQL 端点：1 个（/graphql，包含 12 个 operation）
+
+  将按各自协议规则构造请求和断言。
+```
+
 #### 0.1 解析接口文档
 
 1. **定位文档**：让用户提供接口文档和测试数据文档的路径
@@ -893,7 +978,10 @@ HTTP_STATUS=$(echo "$RESPONSE" | grep -o '[0-9]\{3\}$')
 
 **响应时间断言用法**：
 
-在用例中添加独立字段（不在预期响应体内）：
+不同接口可接受的响应时间差异很大，不应该一刀切。支持三种方式设定阈值：
+
+**方式一：用例级别 — 每个用例单独指定（最精确）**
+
 ```markdown
 - 响应时间要求：@responseTimeLt(500)
 ```
@@ -907,6 +995,44 @@ HTTP_STATUS=$(echo "$RESPONSE" | grep -o '[0-9]\{3\}$')
     "body": { ... }
   }
 }
+```
+
+**方式二：按接口特征自动推断（用户未指定时的默认值）**
+
+当用例没有显式配置响应时间阈值时，根据接口特征自动分配默认阈值：
+
+| 接口特征 | 识别方式 | 默认阈值 | 理由 |
+|---------|---------|---------|------|
+| 认证登录 | 路径含 `login`/`auth`/`token` | 1000ms | 可能涉及加密/外部验证 |
+| 简单查询 | `GET` + 路径不含 `list`/`search`/`export` | 500ms | 单条数据读取，应该快 |
+| 列表查询 | `GET` + 路径含 `list`/`search` 或有分页参数 | 2000ms | 涉及分页和条件查询 |
+| 数据写入 | `POST`/`PUT`/`PATCH`（非特殊路径） | 1000ms | 写入+校验 |
+| 删除操作 | `DELETE` | 500ms | 通常是简单操作 |
+| 文件上传 | 请求含 `multipart/form-data` | 10000ms | 文件大小不可控 |
+| 数据导出 | 路径含 `export`/`download`/`report` | 30000ms | 大量数据处理，天然慢 |
+| 数据导入/洗数据 | 路径含 `import`/`batch`/`sync`/`migrate` | 60000ms | 批量操作，耗时长 |
+| 聚合统计 | 路径含 `statistics`/`summary`/`dashboard`/`analytics` | 5000ms | 复杂计算 |
+
+**方式三：全局默认值 — 兜底**
+
+如果用例没有指定、特征也无法匹配，使用全局默认值 `3000ms`。可在环境配置中覆盖：
+
+```markdown
+## 环境配置
+- DEFAULT_RESPONSE_TIME: 3000
+```
+
+**优先级**：用例级别 > 接口特征推断 > 全局默认值
+
+**报告中的展示**：
+
+```
+| # | 用例 | 接口 | 耗时 | 阈值 | 阈值来源 | 结果 |
+|---|------|------|------|------|---------|------|
+| 1 | 用户登录 | POST /login | 320ms | 1000ms | 自动推断(认证) | ✅ |
+| 2 | 订单列表 | GET /orders | 1850ms | 2000ms | 自动推断(列表) | ✅ |
+| 3 | 数据导出 | GET /export | 8500ms | 30000ms | 自动推断(导出) | ✅ |
+| 4 | 商品详情 | GET /products/1 | 2100ms | 500ms | 用例指定 | ❌ |
 ```
 
 **断言执行逻辑**：
@@ -962,9 +1088,9 @@ HTTP_STATUS=$(echo "$RESPONSE" | grep -o '[0-9]\{3\}$')
 # API 测试报告
 
 **执行时间**：2026-02-21 14:30:00
-**目标环境**：http://localhost:8080
+**目标环境**：staging（https://staging-api.example.com）
+**接口协议**：REST
 **测试范围**：订单模块（用户选择）+ 前置依赖 2 个（自动补充）
-**目标环境**：staging
 **总用例数**：15
 **通过**：11 ✅
 **失败**：2 ❌
@@ -1162,7 +1288,8 @@ curl -s -w "\n---HTTP_STATUS_CODE---%{http_code}" \
 ```
 用户触发测试（可直接指定范围，如"测用户模块"/"跑 P0"/"回归测试"）
   ↓
-Step 0: 解析 + 范围选择
+Step 0: 探测 + 解析 + 范围选择
+  ├── 0.0 探测接口协议（REST / GraphQL / JSON-RPC / 自定义 / 混合）
   ├── 0.1 解析接口文档 + 测试数据 + 签名配置
   ├── 0.2 确定测试范围（自然语言匹配 / 交互式选择）
   │     └── 自动补充前置依赖
@@ -1178,7 +1305,7 @@ Step 2: 按依赖顺序执行用例
   ├── 签名计算（如需要）
   ├── 构造请求（REST / GraphQL）
   ├── 发送请求
-  ├── 断言校验（状态码 + 响应时间 + 响应体）
+  ├── 断言校验（状态码 + 响应时间分级阈值 + 响应体）
   ├── 提取变量
   └── 异常处理（连接失败/非 JSON/变量缺失 → ERROR 状态）
   ↓
