@@ -341,12 +341,13 @@ tags: [api-testing, mock, automation, test-execution, quality-assurance]
 
 **环境选择逻辑**：
 
-| 场景 | 处理 |
-|------|------|
-| 文档中定义了多个环境 | Step 1 时列出环境让用户选择 |
-| 文档中只有一个环境 | 直接使用，不追问 |
-| 文档中没有环境配置 | 询问用户输入 BASE_URL |
-| 用户在触发时指定了环境（如"在 staging 上跑"） | 直接匹配对应环境 |
+| 优先级 | 场景 | 处理 |
+|--------|------|------|
+| 1 | 用户在触发时指定了环境（如"在 staging 上跑"） | 直接匹配对应环境 |
+| 2 | 文档中定义了多个环境 | Step 1 时列出环境让用户选择 |
+| 3 | 文档中只有一个环境 | 直接使用，不追问 |
+| 4 | 文档中没有环境配置 | 自动探测项目配置文件（详见「多语言环境配置探测规范」），展示探测结果让用户确认 |
+| 5 | 文档无配置 + 探测无结果 | 询问用户输入 BASE_URL |
 
 **生产环境保护**：
 - 环境名包含 `prod` / `production` 时，二次确认
@@ -430,6 +431,244 @@ Controller → @PostMapping("/users")
 ```
 
 > **注意**：从代码提取的 Schema 可能不完整（如动态路由、中间件注入的参数）。提取后应让用户确认补充。
+
+---
+
+## 多语言环境配置探测规范
+
+当用户未在测试文档中提供环境配置时，自动从项目代码和配置文件中探测环境信息。探测逻辑与「多语言 API Schema 提取规范」共享语言/框架识别结果（复用 `pom.xml` / `package.json` / `go.mod` / `requirements.txt` 的识别）。
+
+### 通用探测策略
+
+```
+1. 识别项目语言和框架（复用 Schema 提取阶段的识别结果）
+2. 按语言规范扫描环境配置文件
+3. 提取所有环境的 BASE_URL（host + port + context-path）
+4. 识别环境名称（dev / staging / prod 等）
+5. 输出探测结果，让用户确认或修正
+```
+
+### Java (Spring Boot)
+
+**扫描目标**：`src/main/resources/` 下的配置文件
+
+| 文件 | 说明 |
+|------|------|
+| `application.yml` / `application.properties` | 主配置，含默认端口和激活的 profile |
+| `application-dev.yml` / `application-dev.properties` | 开发环境配置 |
+| `application-staging.yml` / `application-test.yml` | 测试环境配置 |
+| `application-prod.yml` | 生产环境配置 |
+| `bootstrap.yml` | Spring Cloud 项目的配置中心地址 |
+
+**提取字段**：
+
+| 配置键 | 用途 | 示例 |
+|--------|------|------|
+| `server.port` | 服务端口 | `8080` |
+| `server.servlet.context-path` | 上下文路径 | `/api` |
+| `spring.profiles.active` | 当前激活环境 | `dev` |
+| `spring.application.name` | 服务名（微服务场景） | `user-service` |
+
+**BASE_URL 拼接规则**：
+```
+BASE_URL = http://localhost:{server.port}{context-path}
+```
+
+**多 profile 示例**：
+```
+检测到 Spring Boot 项目，扫描到以下环境配置：
+
+  application.yml          → server.port: 8080（默认）
+  application-dev.yml      → server.port: 8080
+  application-staging.yml  → server.port: 8081
+  application-prod.yml     → server.port: 80
+
+提取结果：
+  dev     → http://localhost:8080
+  staging → http://localhost:8081
+  prod    → http://localhost:80  ⚠️ 生产环境
+```
+
+### Node.js (Express / NestJS / Koa)
+
+**扫描目标**：项目根目录及 `config/` 目录
+
+| 文件 | 说明 |
+|------|------|
+| `.env` | 默认环境变量 |
+| `.env.development` / `.env.dev` | 开发环境 |
+| `.env.staging` / `.env.test` | 测试环境 |
+| `.env.production` / `.env.prod` | 生产环境 |
+| `config/default.json` / `config/development.json` | node-config 风格 |
+| `package.json` → `scripts` | 启动命令中的端口和环境变量 |
+
+**提取字段**：
+
+| 变量名 | 用途 | 示例 |
+|--------|------|------|
+| `PORT` | 服务端口 | `3000` |
+| `BASE_URL` / `API_URL` / `API_BASE_URL` | 服务地址 | `http://localhost:3000` |
+| `NODE_ENV` | 环境标识 | `development` |
+| `API_PREFIX` | 路径前缀 | `/api/v1` |
+
+**package.json scripts 解析**：
+```json
+{
+  "scripts": {
+    "dev": "PORT=3000 node server.js",
+    "start:staging": "NODE_ENV=staging PORT=3001 node server.js"
+  }
+}
+```
+→ 从启动命令中提取 `PORT` 和环境标识
+
+**.env 文件解析示例**：
+```
+# .env.development
+PORT=3000
+API_PREFIX=/api/v1
+
+# .env.staging
+PORT=3001
+API_PREFIX=/api/v1
+```
+→ 每个 `.env.*` 文件对应一个环境，提取其中的端口和路径前缀
+
+### Python (Django / FastAPI / Flask)
+
+**扫描目标**：项目根目录及配置模块
+
+| 框架 | 扫描文件 | 说明 |
+|------|---------|------|
+| Django | `settings/base.py`, `settings/dev.py`, `settings/staging.py`, `settings/prod.py` | settings 模块拆分模式 |
+| Django | `settings.py` + 环境变量 `DJANGO_SETTINGS_MODULE` | 单文件模式 |
+| FastAPI / Flask | `.env`, `config.py`, `settings.py`, `core/config.py` | 配置文件 |
+| 通用 | `.env`, `.env.*`, `pyproject.toml` | 环境变量和项目配置 |
+
+**提取字段**：
+
+| 变量 | 用途 | 示例 |
+|------|------|------|
+| `HOST` / `BIND` | 监听地址 | `0.0.0.0` |
+| `PORT` | 服务端口 | `8000` |
+| `DEBUG` | 调试模式 | `True`（可推断为 dev 环境） |
+| `DATABASE_URL` | 数据库连接 | 含 `localhost` → dev |
+| `ALLOWED_HOSTS` | Django 允许域名 | 可推断环境 |
+
+**启动命令解析**：
+```bash
+# pyproject.toml / Makefile / Procfile 中
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+gunicorn -b 0.0.0.0:8000 app:app
+python manage.py runserver 0.0.0.0:8000
+```
+→ 提取 `--port` / `-b` 参数中的端口
+
+**Django settings 模块解析**：
+```
+settings/
+  base.py          → 公共配置
+  dev.py           → DEBUG=True, PORT=8000
+  staging.py       → DEBUG=False, ALLOWED_HOSTS=['staging.example.com']
+  prod.py          → DEBUG=False, ALLOWED_HOSTS=['api.example.com']
+```
+→ 每个 settings 文件对应一个环境
+
+### Go (Gin / Echo / Chi)
+
+**扫描目标**：项目根目录及 `config/`、`configs/` 目录
+
+| 文件 | 说明 |
+|------|------|
+| `config.yaml` / `config.toml` / `config.json` | 主配置文件 |
+| `config/dev.yaml` / `config/staging.yaml` / `config/prod.yaml` | 按环境拆分 |
+| `.env` | 环境变量 |
+| `cmd/server/main.go` / `main.go` | 启动入口，可能含默认端口 |
+
+**提取字段**：
+
+| 配置键 | 用途 | 示例 |
+|--------|------|------|
+| `server.port` / `http.port` / `port` | 服务端口 | `8080` |
+| `server.host` / `http.addr` | 监听地址 | `0.0.0.0:8080` |
+| `env` / `app.env` / `mode` | 环境标识 | `development` |
+
+**Go 代码中的端口回退扫描**：
+```go
+// 常见模式：从环境变量读取，fallback 到默认值
+port := os.Getenv("PORT")
+if port == "" {
+    port = "8080"
+}
+r.Run(":" + port)
+```
+→ 扫描 `main.go` 中的 `Run` / `Start` / `Listen` / `ListenAndServe` 调用，提取默认端口
+
+### Docker / Docker Compose
+
+**扫描目标**：项目根目录
+
+| 文件 | 说明 |
+|------|------|
+| `docker-compose.yml` | 默认编排文件 |
+| `docker-compose.dev.yml` / `docker-compose.override.yml` | 开发环境覆盖 |
+| `docker-compose.staging.yml` / `docker-compose.prod.yml` | 其他环境 |
+| `Dockerfile` | `EXPOSE` 声明的端口 |
+
+**提取逻辑**：
+
+```yaml
+# docker-compose.yml
+services:
+  api:
+    ports:
+      - "8080:3000"        # 宿主机端口:容器端口 → BASE_URL 用宿主机端口
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+```
+→ 提取 `ports` 映射中的宿主机端口 + `environment` 中的环境变量
+
+**多 compose 文件**：
+```
+docker-compose.yml              → 基础定义
+docker-compose.dev.yml          → ports: 3000:3000, NODE_ENV=development
+docker-compose.staging.yml      → ports: 3001:3000, NODE_ENV=staging
+```
+→ 每个 compose 文件对应一个环境，从文件名推断环境名
+
+### 探测优先级
+
+当项目同时存在多种配置来源时，按以下优先级合并：
+
+| 优先级 | 来源 | 说明 |
+|--------|------|------|
+| 1（最高） | 用户在测试文档中手动配置 | 用户显式提供的永远优先 |
+| 2 | `.env` / `.env.*` 文件 | 最直接的环境变量定义 |
+| 3 | 框架配置文件（`application.yml` 等） | 框架约定的标准配置 |
+| 4 | `docker-compose*.yml` | 容器编排配置 |
+| 5 | 启动命令 / 代码中的默认值 | 兜底回退值 |
+
+### 探测结果输出
+
+探测完成后，输出标准化的环境信息供用户确认：
+
+```
+🔍 环境配置探测结果：
+
+  项目类型：Spring Boot (Java)
+  探测来源：application-*.yml
+
+  环境           BASE_URL                          来源文件                      状态
+  ──────────────────────────────────────────────────────────────────────────────────
+  dev            http://localhost:8080              application-dev.yml           可用
+  staging        http://localhost:8081              application-staging.yml       可用
+  prod           http://localhost:80                application-prod.yml          ⚠️ 生产
+
+  建议使用 dev 环境执行测试。请确认或修正以上配置，也可手动指定 BASE_URL。
+```
+
+> **注意**：自动探测的环境配置可能不完整（如外部配置中心、Kubernetes ConfigMap、Nacos/Apollo 动态配置等注入的变量）。探测结果仅作为建议，始终让用户确认后再使用。
 
 ---
 
@@ -880,14 +1119,36 @@ curl -s -X POST \
    - 用户在触发时指定了环境（如"在 staging 上跑"）→ 直接匹配
    - 文档中定义了多个环境（dev/staging/prod）→ 列出让用户选择
    - 文档中只有一个环境 → 直接使用
-   - 文档中没有环境配置 → 询问用户输入 BASE_URL
+   - 文档中没有环境配置 → **自动探测项目配置**（见下方）
+   - 探测也无结果 → 询问用户输入 BASE_URL
    - 环境名含 `prod` / `production` → **二次确认**，标记 `READ_ONLY` 时仅执行 GET 请求
-2. **检查连通性**：
+2. **自动探测环境配置**（文档无环境配置时触发）：
+   - 复用 Step 0 中识别的项目语言和框架
+   - 按「多语言环境配置探测规范」扫描项目配置文件
+   - 探测流程：
+     ```
+     识别项目类型（复用 Step 0 结果）
+       ↓
+     扫描对应配置文件
+       Java  → application-*.yml / application-*.properties
+       Node  → .env.* / config/*.json / package.json scripts
+       Python → settings/*.py / .env.* / Makefile
+       Go    → config/*.yaml / .env / main.go
+       Docker → docker-compose*.yml / Dockerfile EXPOSE
+       ↓
+     提取各环境的 host + port + context-path → 拼接 BASE_URL
+       ↓
+     输出探测结果，让用户确认
+     ```
+   - 如果探测到多个环境 → 列出让用户选择
+   - 如果探测到单个环境 → 展示并确认
+   - 如果探测失败（无配置文件、配置不含端口等）→ 回退到询问用户手动输入 BASE_URL
+3. **检查连通性**：
    ```bash
    curl -s -o /dev/null -w "%{http_code}" ${BASE_URL}/health
    ```
    - 如果目标服务未启动，提示用户启动服务
-3. **初始化变量池**：用于存储接口间传递的动态变量（如 token、userId）
+4. **初始化变量池**：用于存储接口间传递的动态变量（如 token、userId）
 
 ### Step 2: 按依赖顺序执行用例
 
@@ -1208,7 +1469,8 @@ Step 0: 探测 + 解析 + 范围选择
   └── 0.3 构建执行计划 → 用户确认
   ↓
 Step 1: 环境准备
-  ├── 选择目标环境（dev/staging/prod）
+  ├── 选择目标环境（文档定义 / 自动探测项目配置 / 用户手动输入）
+  │     └── 自动探测：按项目类型扫描配置文件（application.yml / .env.* / config/ / docker-compose.yml）
   ├── 检查连通性
   └── 初始化变量池
   ↓
