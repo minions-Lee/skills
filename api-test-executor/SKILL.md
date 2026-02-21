@@ -1010,7 +1010,7 @@ HTTP_STATUS=$(echo "$RESPONSE" | grep -o '[0-9]\{3\}$')
 | 删除操作 | `DELETE` | 500ms | 通常是简单操作 |
 | 文件上传 | 请求含 `multipart/form-data` | 10000ms | 文件大小不可控 |
 | 数据导出 | 路径含 `export`/`download`/`report` | 30000ms | 大量数据处理，天然慢 |
-| 数据导入/洗数据 | 路径含 `import`/`batch`/`sync`/`migrate` | 60000ms | 批量操作，耗时长 |
+| 数据导入/洗数据 | 路径含 `import`/`batch`/`sync`/`migrate` | 不限制 | 批量操作，耗时不可预估，跳过响应时间断言 |
 | 聚合统计 | 路径含 `statistics`/`summary`/`dashboard`/`analytics` | 5000ms | 复杂计算 |
 
 **方式三：全局默认值 — 兜底**
