@@ -318,14 +318,40 @@ tags: [api-testing, mock, automation, test-execution, quality-assurance]
 
 ### 4. 环境配置（可选）
 
-```markdown
-## 环境变量
+支持多环境定义，执行时选择目标环境。
 
+```markdown
+## 环境配置
+
+### dev（开发环境）
 - BASE_URL: http://localhost:8080
-- AUTH_TOKEN: （留空，由登录接口动态获取）
-- DB_HOST: localhost
+- AUTH_TOKEN:（留空，由登录接口动态获取）
 - TIMEOUT: 10000
+
+### staging（测试环境）
+- BASE_URL: https://staging-api.example.com
+- AUTH_TOKEN:（留空）
+- TIMEOUT: 15000
+
+### prod（生产环境）⚠️ 只读
+- BASE_URL: https://api.example.com
+- AUTH_TOKEN:（留空）
+- TIMEOUT: 10000
+- READ_ONLY: true
 ```
+
+**环境选择逻辑**：
+
+| 场景 | 处理 |
+|------|------|
+| 文档中定义了多个环境 | Step 1 时列出环境让用户选择 |
+| 文档中只有一个环境 | 直接使用，不追问 |
+| 文档中没有环境配置 | 询问用户输入 BASE_URL |
+| 用户在触发时指定了环境（如"在 staging 上跑"） | 直接匹配对应环境 |
+
+**生产环境保护**：
+- 环境名包含 `prod` / `production` 时，二次确认
+- 如果标记了 `READ_ONLY: true`，只执行 GET 请求，跳过所有写操作（POST/PUT/DELETE），并在报告中注明
 
 ---
 
@@ -861,14 +887,35 @@ HTTP_STATUS=$(echo "$RESPONSE" | grep -o '[0-9]\{3\}$')
 | 包含断言 | `"field": "@contains(substring)"` | 字段值包含指定子串 |
 | 数组长度 | `"field": "@lengthGt(0)"` | 数组长度大于指定值 |
 | 正则匹配 | `"field": "@matches(^\\d{4}$)"` | 字段值匹配正则表达式 |
+| 范围断言 | `"field": "@between(1,100)"` | 字段值在指定范围内 |
+| 响应时间 | `@responseTimeLt(500)` | 响应时间小于 500ms（写在用例级别，不在响应体内） |
 | 忽略字段 | `"field": "@any"` | 跳过该字段不做校验 |
+
+**响应时间断言用法**：
+
+在用例中添加独立字段（不在预期响应体内）：
+```markdown
+- 响应时间要求：@responseTimeLt(500)
+```
+或在 JSON 格式中：
+```json
+{
+  "id": "TC001",
+  "expected": {
+    "status": 200,
+    "responseTime": "@responseTimeLt(500)",
+    "body": { ... }
+  }
+}
+```
 
 **断言执行逻辑**：
 1. 先校验状态码
-2. 解析响应体 JSON
-3. 递归对比预期响应与实际响应
-4. 遇到 `@` 开头的特殊断言，执行对应校验逻辑
-5. 记录每个断言的通过/失败状态
+2. 校验响应时间（如配置了 `@responseTimeLt`）
+3. 解析响应体 JSON
+4. 递归对比预期响应与实际响应
+5. 遇到 `@` 开头的特殊断言，执行对应校验逻辑
+6. 记录每个断言的通过/失败状态
 
 #### 2.6 提取变量
 
@@ -885,6 +932,28 @@ HTTP_STATUS=$(echo "$RESPONSE" | grep -o '[0-9]\{3\}$')
 用例名称 | 状态 | 耗时 | 失败原因（如有）
 ```
 
+#### 2.8 执行异常处理
+
+测试执行中不可避免会遇到非预期情况，按以下规则处理：
+
+| 异常场景 | 判定方式 | 处理 |
+|---------|---------|------|
+| **连接失败** | curl exit code 非 0（如 7=连接拒绝, 28=超时） | 标记该用例为 `ERROR`，记录 curl 错误码和信息，继续执行下一个无依赖的用例 |
+| **响应非 JSON** | 响应体无法 `json` 解析（如返回 HTML 错误页） | 标记为 `ERROR`，报告中展示响应体前 500 字符，提示用户检查服务状态 |
+| **变量提取失败** | 响应中目标路径不存在（如 `response.data.token` 但 `data` 为 null） | 标记当前用例为 `FAIL`，变量池中该变量置为 `__EXTRACT_FAILED__`，依赖该变量的后续用例自动跳过 |
+| **变量未定义** | 请求中引用 `{{varName}}` 但变量池中不存在 | 标记为 `ERROR`，不发送请求，报告中提示缺失变量来源 |
+| **HTTP 重定向** | 状态码 301/302 | 不自动跟随重定向，记录实际状态码和 `Location` 头，让用户决定是否调整 |
+| **状态码 5xx** | 服务端错误 | 正常记录，如果连续 3 个用例都返回 5xx，暂停执行并提示用户检查服务 |
+
+**用例状态扩展**：
+
+| 状态 | 含义 |
+|------|------|
+| `PASS` ✅ | 所有断言通过 |
+| `FAIL` ❌ | 请求成功但断言未通过 |
+| `ERROR` ⚠️ | 请求本身异常（连接失败、非 JSON、变量缺失等） |
+| `SKIP` ⏭️ | 前置依赖失败/出错，自动跳过 |
+
 ### Step 3: 生成测试报告
 
 #### 报告格式
@@ -894,9 +963,12 @@ HTTP_STATUS=$(echo "$RESPONSE" | grep -o '[0-9]\{3\}$')
 
 **执行时间**：2026-02-21 14:30:00
 **目标环境**：http://localhost:8080
+**测试范围**：订单模块（用户选择）+ 前置依赖 2 个（自动补充）
+**目标环境**：staging
 **总用例数**：15
-**通过**：12 ✅
+**通过**：11 ✅
 **失败**：2 ❌
+**异常**：1 ⚠️（连接超时）
 **跳过**：1 ⏭️（依赖的前置用例失败）
 
 ## 总览
@@ -977,6 +1049,86 @@ Authorization: Bearer eyJhbG...
 - 前置用例失败时，依赖它的所有后续用例自动标记为「跳过」
 - 循环依赖检测：发现循环时报错并提示用户修正
 
+### GraphQL 支持
+
+除 REST API 外，同样支持 GraphQL 接口测试。
+
+**识别方式**：
+- 接口文档中路径统一为 `/graphql`（或 `/gql`）
+- 请求体包含 `query` 或 `mutation` 字段
+- 项目代码中存在 `.graphql` / `.gql` schema 文件
+
+**请求构造**：
+
+GraphQL 请求统一用 POST 方法，Body 为 JSON：
+
+```bash
+curl -s -w "\n---HTTP_STATUS_CODE---%{http_code}" \
+  -X POST \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer {{token}}" \
+  -d '{
+    "query": "mutation CreateOrder($input: OrderInput!) { createOrder(input: $input) { id status totalAmount } }",
+    "variables": {
+      "input": {
+        "productId": "{{productId}}",
+        "quantity": 2
+      }
+    }
+  }' \
+  "${BASE_URL}/graphql"
+```
+
+**测试用例格式**（Markdown）：
+
+```markdown
+## 用例：创建订单 - GraphQL
+
+- 接口：POST /graphql
+- 操作类型：mutation
+- 请求体：
+  ```json
+  {
+    "query": "mutation CreateOrder($input: OrderInput!) { createOrder(input: $input) { id status } }",
+    "variables": {
+      "input": { "productId": "{{productId}}", "quantity": 2 }
+    }
+  }
+  ```
+- 预期状态码：200
+- 预期响应：
+  ```json
+  {
+    "data": {
+      "createOrder": {
+        "id": "@isNotEmpty",
+        "status": "PENDING"
+      }
+    }
+  }
+  ```
+- 提取变量：`orderId = response.data.createOrder.id`
+```
+
+**GraphQL 特有的断言**：
+
+| 断言 | 说明 |
+|------|------|
+| `"errors": "@isNull"` | 无错误（正向用例） |
+| `"errors[0].message": "@contains(xxx)"` | 错误消息包含指定内容（异常用例） |
+| `"errors[0].extensions.code": "UNAUTHENTICATED"` | 错误码匹配（鉴权测试） |
+| `"data.fieldName": null` | 异常时 data 字段为 null |
+
+**与 REST 的差异处理**：
+
+| 项目 | REST | GraphQL |
+|------|------|---------|
+| 路径 | 每个接口不同路径 | 统一 `/graphql` |
+| 方法 | GET/POST/PUT/DELETE | 统一 POST |
+| 错误响应 | HTTP 状态码 4xx/5xx | 状态码 200 + `errors` 数组 |
+| 断言重点 | 状态码 + 响应体 | `data` 字段 + `errors` 是否为空 |
+| 接口区分 | 按 URL 路径 | 按 operation name（`query`/`mutation` 名称） |
+
 ### 批量数据驱动
 
 同一个接口，多组数据：
@@ -1008,23 +1160,32 @@ Authorization: Bearer eyJhbG...
 ## 工作流程总结
 
 ```
-用户提供文档路径
+用户触发测试（可直接指定范围，如"测用户模块"/"跑 P0"/"回归测试"）
   ↓
-Step 0: 解析接口文档 + 测试数据文档
+Step 0: 解析 + 范围选择
+  ├── 0.1 解析接口文档 + 测试数据 + 签名配置
+  ├── 0.2 确定测试范围（自然语言匹配 / 交互式选择）
+  │     └── 自动补充前置依赖
+  └── 0.3 构建执行计划 → 用户确认
   ↓
-Step 1: 确认环境 + 检查连通性
+Step 1: 环境准备
+  ├── 选择目标环境（dev/staging/prod）
+  ├── 检查连通性
+  └── 初始化变量池
   ↓
-Step 2: 拓扑排序 → 逐个执行用例
+Step 2: 按依赖顺序执行用例
   ├── 变量替换
-  ├── 构造请求
+  ├── 签名计算（如需要）
+  ├── 构造请求（REST / GraphQL）
   ├── 发送请求
-  ├── 断言校验
-  └── 提取变量
+  ├── 断言校验（状态码 + 响应时间 + 响应体）
+  ├── 提取变量
+  └── 异常处理（连接失败/非 JSON/变量缺失 → ERROR 状态）
   ↓
-Step 3: 生成测试报告
+Step 3: 生成测试报告（PASS / FAIL / ERROR / SKIP 四种状态）
   ↓
 询问用户：
-  ├── 重跑失败用例
+  ├── 重跑失败/出错用例
   ├── 查看某个用例详情
   ├── 修改测试数据重新执行
   └── 测试完成
