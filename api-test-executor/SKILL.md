@@ -137,6 +137,182 @@ tags: [api-testing, mock, automation, test-execution, quality-assurance]
 
 ---
 
+## 多语言 API Schema 提取规范
+
+当用户未提供独立的接口文档，而是让你直接从项目代码中提取 API 定义时，按以下语言规范扫描。
+
+### Java (Spring Boot)
+
+**扫描目标**：`*Controller.java`、`*Resource.java`
+
+**提取位置**：
+
+| 注解/结构 | 提取内容 |
+|-----------|---------|
+| `@RestController` / `@Controller` | 标识 Controller 类 |
+| `@RequestMapping("/api/v1/xxx")` | 基础路径前缀 |
+| `@GetMapping` / `@PostMapping` / `@PutMapping` / `@DeleteMapping` | 接口路径 + 方法 |
+| `@PathVariable` | Path 参数 |
+| `@RequestParam` | Query 参数 |
+| `@RequestBody` | Body 参数（跳转到对应 DTO/VO 类提取字段） |
+| `@Valid` / `@NotNull` / `@Size` 等 | 参数校验规则 |
+| 返回类型 `ResponseEntity<T>` / `Result<T>` | 响应结构（跳转到泛型类提取字段） |
+
+**DTO/VO 解析**：
+- 定位 `@RequestBody` 引用的类（通常在 `dto/`、`vo/`、`model/` 包下）
+- 提取所有字段名、类型、校验注解
+- 嵌套对象递归解析
+
+**示例提取路径**：
+```
+Controller → @PostMapping("/users")
+  → 参数: @RequestBody UserCreateDTO
+    → 跳转 UserCreateDTO.java → 提取 {username: String @NotNull, email: String @Email, ...}
+  → 返回: Result<UserVO>
+    → 跳转 UserVO.java → 提取 {userId: Long, username: String, ...}
+```
+
+### Python (FastAPI / Flask / Django)
+
+**扫描目标**：`routes/*.py`、`views/*.py`、`api/*.py`
+
+| 框架 | 提取方式 |
+|------|---------|
+| FastAPI | `@app.get/post()` 装饰器 + Pydantic Model（自带类型和校验） |
+| Flask | `@app.route()` 装饰器 + docstring / marshmallow schema |
+| Django REST | `ViewSet` 类 + `serializers.py` 中的 Serializer 定义 |
+
+### Go (Gin / Echo / Chi)
+
+**扫描目标**：`router.go`、`handler/*.go`
+
+| 框架 | 提取方式 |
+|------|---------|
+| Gin | `r.GET/POST()` 路由注册 + handler 函数中的 `c.ShouldBindJSON(&struct)` |
+| Echo | `e.GET/POST()` + `c.Bind(&struct)` |
+| Chi | `r.Get/Post()` + `json.NewDecoder(r.Body).Decode(&struct)` |
+
+**Struct Tag 解析**：提取 `json:"field_name"` 和 `binding:"required"` / `validate:"required"` 标签。
+
+### Node.js (Express / NestJS / Koa)
+
+| 框架 | 提取方式 |
+|------|---------|
+| Express | `router.get/post()` + `req.body` / `req.query` / `req.params` 的使用 |
+| NestJS | `@Get()` / `@Post()` 装饰器 + `@Body()` DTO 类（class-validator 装饰器） |
+| Koa | `router.get/post()` + `ctx.request.body` 的使用 |
+
+### 通用扫描策略
+
+```
+1. 识别项目语言和框架（package.json / pom.xml / go.mod / requirements.txt）
+2. 定位路由/Controller 入口文件
+3. 逐个提取：路径、方法、参数（位置+类型+校验）、响应结构
+4. 输出标准化的接口清单（Markdown 表格格式）
+5. 让用户确认后，用于构造测试请求
+```
+
+> **注意**：从代码提取的 Schema 可能不完整（如动态路由、中间件注入的参数）。提取后应让用户确认补充。
+
+---
+
+## 签名脚本
+
+部分 API 需要请求签名（如 HMAC、RSA 签名），在发送请求前需要执行签名计算。
+
+### 签名流程
+
+```
+构造请求参数
+  ↓
+按签名规则排序/拼接参数
+  ↓
+执行签名脚本计算签名值
+  ↓
+将签名注入请求头或请求参数
+  ↓
+发送请求
+```
+
+### 签名配置
+
+在测试数据文档或环境配置中定义签名信息：
+
+```markdown
+## 签名配置
+
+- 签名算法：HmacSHA256 | MD5 | RSA-SHA256
+- App Key：{{APP_KEY}}
+- App Secret：{{APP_SECRET}}
+- 签名脚本路径：./scripts/sign.sh（或 sign.py / sign.js）
+- 签名位置：Header（X-Signature） | Query（sign=xxx）
+- 时间戳字段：timestamp（秒级/毫秒级）
+- Nonce 字段：nonce（随机字符串）
+```
+
+### 内置签名模板
+
+#### 模板 1：通用 HMAC-SHA256 签名
+
+签名串拼接规则：
+```
+待签名字符串 = HTTP_METHOD + "\n" + PATH + "\n" + SORTED_PARAMS + "\n" + TIMESTAMP + "\n" + NONCE
+签名值 = HMAC-SHA256(待签名字符串, APP_SECRET)
+```
+
+执行方式：
+```bash
+SIGN_STRING="${METHOD}\n${PATH}\n${SORTED_PARAMS}\n${TIMESTAMP}\n${NONCE}"
+SIGNATURE=$(echo -ne "$SIGN_STRING" | openssl dgst -sha256 -hmac "${APP_SECRET}" -binary | base64)
+```
+
+#### 模板 2：MD5 参数签名
+
+签名串拼接规则：
+```
+参数按 key 字母序排列 → key1=value1&key2=value2&...&key=APP_SECRET
+签名值 = MD5(拼接字符串).toUpperCase()
+```
+
+#### 模板 3：自定义签名脚本
+
+如果项目有特殊的签名逻辑，用户可提供自定义签名脚本：
+
+```markdown
+## 自定义签名脚本
+
+- 脚本路径：./scripts/sign.sh
+- 输入参数：METHOD, PATH, BODY_JSON, TIMESTAMP, APP_KEY, APP_SECRET
+- 输出：签名值（stdout 输出纯文本）
+```
+
+调用方式：
+```bash
+SIGNATURE=$(bash ./scripts/sign.sh \
+  --method "${METHOD}" \
+  --path "${PATH}" \
+  --body "${BODY_JSON}" \
+  --timestamp "${TIMESTAMP}" \
+  --app-key "${APP_KEY}" \
+  --app-secret "${APP_SECRET}")
+```
+
+### 签名注入
+
+签名计算完成后，根据配置自动注入到请求中：
+
+| 注入位置 | 方式 |
+|---------|------|
+| Header | 添加 `-H "X-Signature: ${SIGNATURE}" -H "X-Timestamp: ${TIMESTAMP}" -H "X-Nonce: ${NONCE}"` |
+| Query | URL 追加 `&sign=${SIGNATURE}&timestamp=${TIMESTAMP}&nonce=${NONCE}` |
+| Body | JSON body 中追加签名字段 |
+
+> **安全提示**：APP_SECRET 不应出现在测试报告中，仅在执行时从环境变量或配置文件读取。
+
+> **待补充**：用户可在此处补充具体项目的签名规则和脚本实现。
+
+---
+
 ## 执行流程
 
 ### Step 0: 解析输入
@@ -146,9 +322,10 @@ tags: [api-testing, mock, automation, test-execution, quality-assurance]
    - Swagger/OpenAPI → 解析 paths、schemas、parameters
    - Markdown → 提取接口路径、方法、参数、响应结构
    - Postman Collection → 解析 item 数组
-   - 代码路由 → 扫描 Controller/Router 注解/装饰器
+   - 代码路由 → 按「多语言 API Schema 提取规范」扫描（自动识别语言和框架）
 3. **解析测试数据**：提取每个用例的请求数据、预期结果、依赖关系
-4. **构建依赖图**：根据用例间的依赖关系确定执行顺序
+4. **解析签名配置**：如果测试文档中包含签名配置，加载签名算法、密钥和脚本路径
+5. **构建依赖图**：根据用例间的依赖关系确定执行顺序
 
 ### Step 1: 环境准备
 
@@ -176,7 +353,15 @@ tags: [api-testing, mock, automation, test-execution, quality-assurance]
   → Authorization: Bearer eyJhbGciOiJIUzI1NiJ9...
 ```
 
-#### 2.2 构造请求
+#### 2.2 签名计算（如需要）
+
+如果接口配置了签名，在构造请求前执行签名流程：
+1. 生成 timestamp 和 nonce
+2. 按签名配置拼接待签名字符串
+3. 调用内置模板或自定义签名脚本计算签名值
+4. 将签名值、timestamp、nonce 存入当前请求的 Header/Query/Body（按配置决定）
+
+#### 2.3 构造请求
 
 根据接口文档和用例数据构造 curl 命令：
 
@@ -199,7 +384,7 @@ curl -s -w "\n%{http_code}" \
 | Form 参数 | `-F` 传递 |
 | Header | `-H` 逐个添加 |
 
-#### 2.3 执行请求 & 捕获响应
+#### 2.4 执行请求 & 捕获响应
 
 ```bash
 # 执行并分离响应体和状态码
@@ -214,7 +399,7 @@ HTTP_BODY=$(echo "$RESPONSE" | sed '$d')
 HTTP_STATUS=$(echo "$RESPONSE" | grep -o '[0-9]\{3\}$')
 ```
 
-#### 2.4 断言校验
+#### 2.5 断言校验
 
 | 断言类型 | 语法 | 说明 |
 |---------|------|------|
@@ -234,7 +419,7 @@ HTTP_STATUS=$(echo "$RESPONSE" | grep -o '[0-9]\{3\}$')
 4. 遇到 `@` 开头的特殊断言，执行对应校验逻辑
 5. 记录每个断言的通过/失败状态
 
-#### 2.5 提取变量
+#### 2.6 提取变量
 
 如果用例定义了 `提取变量`，从响应中提取值存入变量池：
 
@@ -243,7 +428,7 @@ HTTP_STATUS=$(echo "$RESPONSE" | grep -o '[0-9]\{3\}$')
 → 从实际响应中读取 data.token 的值，存入变量池 token
 ```
 
-#### 2.6 记录结果
+#### 2.7 记录结果
 
 ```
 用例名称 | 状态 | 耗时 | 失败原因（如有）
