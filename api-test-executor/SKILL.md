@@ -3,10 +3,11 @@ name: api-test-executor
 description: |
   基于接口文档和接口测试文档执行 API 测试。读取接口文档（Swagger/OpenAPI/Markdown）中的
   接口定义，结合测试文档中的 mock 数据和预期结果，自动构造请求、执行测试并生成测试报告。
-  支持 REST API、GraphQL。支持环境变量替换、接口依赖链（上一个接口的返回值作为下一个接口的入参）、
-  批量执行和断言校验。
+  自动探测接口协议类型（REST、GraphQL、JSON-RPC、自定义 HTTP），不预设任何规范，
+  按项目实际使用的协议构造请求和断言。支持环境变量替换、接口依赖链（上一个接口的返回值
+  作为下一个接口的入参）、多环境切换、批量执行和断言校验。
   触发词：API 测试、接口测试、执行测试用例、跑接口、测试接口、api test、
-  run api tests、接口验证、mock 测试、接口回归。
+  run api tests、接口验证、mock 测试、接口回归、回归测试。
 author: Claude Code
 version: 1.0.0
 date: 2026-02-21
@@ -670,20 +671,6 @@ OrderController.java → POST /api/v1/orders, GET /api/v1/orders/{id}, PUT /api/
 | **新功能开发完成** | 策略 1（单模块）+ 策略 4（补齐覆盖） |
 | **紧急修复 hotfix** | 策略 3（仅 Diff 涉及接口） |
 
-### 执行时的选择交互
-
-在 Step 0 解析完接口后，询问用户：
-
-```
-检测到项目共有 47 个接口，分布在 6 个模块。请选择测试范围：
-
-1. 全量执行（47 个接口）
-2. 按模块选择（列出模块清单）
-3. 仅核心链路（P0 接口，共 12 个）
-4. 仅变更涉及（基于 git diff，共 5 个接口）
-5. 自定义（指定接口路径或用例编号）
-```
-
 ---
 
 ## 执行流程
@@ -891,9 +878,12 @@ curl -s -X POST \
 
 ### Step 1: 环境准备
 
-1. **确认基础 URL**：
-   - 优先使用测试文档中指定的环境变量
-   - 未指定时，询问用户目标环境地址
+1. **选择目标环境**：
+   - 用户在触发时指定了环境（如"在 staging 上跑"）→ 直接匹配
+   - 文档中定义了多个环境（dev/staging/prod）→ 列出让用户选择
+   - 文档中只有一个环境 → 直接使用
+   - 文档中没有环境配置 → 询问用户输入 BASE_URL
+   - 环境名含 `prod` / `production` → **二次确认**，标记 `READ_ONLY` 时仅执行 GET 请求
 2. **检查连通性**：
    ```bash
    curl -s -o /dev/null -w "%{http_code}" ${BASE_URL}/health
@@ -1175,85 +1165,9 @@ Authorization: Bearer eyJhbG...
 - 前置用例失败时，依赖它的所有后续用例自动标记为「跳过」
 - 循环依赖检测：发现循环时报错并提示用户修正
 
-### GraphQL 支持
+### 非 REST 协议支持
 
-除 REST API 外，同样支持 GraphQL 接口测试。
-
-**识别方式**：
-- 接口文档中路径统一为 `/graphql`（或 `/gql`）
-- 请求体包含 `query` 或 `mutation` 字段
-- 项目代码中存在 `.graphql` / `.gql` schema 文件
-
-**请求构造**：
-
-GraphQL 请求统一用 POST 方法，Body 为 JSON：
-
-```bash
-curl -s -w "\n---HTTP_STATUS_CODE---%{http_code}" \
-  -X POST \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer {{token}}" \
-  -d '{
-    "query": "mutation CreateOrder($input: OrderInput!) { createOrder(input: $input) { id status totalAmount } }",
-    "variables": {
-      "input": {
-        "productId": "{{productId}}",
-        "quantity": 2
-      }
-    }
-  }' \
-  "${BASE_URL}/graphql"
-```
-
-**测试用例格式**（Markdown）：
-
-```markdown
-## 用例：创建订单 - GraphQL
-
-- 接口：POST /graphql
-- 操作类型：mutation
-- 请求体：
-  ```json
-  {
-    "query": "mutation CreateOrder($input: OrderInput!) { createOrder(input: $input) { id status } }",
-    "variables": {
-      "input": { "productId": "{{productId}}", "quantity": 2 }
-    }
-  }
-  ```
-- 预期状态码：200
-- 预期响应：
-  ```json
-  {
-    "data": {
-      "createOrder": {
-        "id": "@isNotEmpty",
-        "status": "PENDING"
-      }
-    }
-  }
-  ```
-- 提取变量：`orderId = response.data.createOrder.id`
-```
-
-**GraphQL 特有的断言**：
-
-| 断言 | 说明 |
-|------|------|
-| `"errors": "@isNull"` | 无错误（正向用例） |
-| `"errors[0].message": "@contains(xxx)"` | 错误消息包含指定内容（异常用例） |
-| `"errors[0].extensions.code": "UNAUTHENTICATED"` | 错误码匹配（鉴权测试） |
-| `"data.fieldName": null` | 异常时 data 字段为 null |
-
-**与 REST 的差异处理**：
-
-| 项目 | REST | GraphQL |
-|------|------|---------|
-| 路径 | 每个接口不同路径 | 统一 `/graphql` |
-| 方法 | GET/POST/PUT/DELETE | 统一 POST |
-| 错误响应 | HTTP 状态码 4xx/5xx | 状态码 200 + `errors` 数组 |
-| 断言重点 | 状态码 + 响应体 | `data` 字段 + `errors` 是否为空 |
-| 接口区分 | 按 URL 路径 | 按 operation name（`query`/`mutation` 名称） |
+GraphQL、JSON-RPC、自定义 HTTP 的识别方式、请求构造和断言规则，详见「执行流程 > Step 0.0 探测接口协议」。
 
 ### 批量数据驱动
 
@@ -1303,7 +1217,7 @@ Step 1: 环境准备
 Step 2: 按依赖顺序执行用例
   ├── 变量替换
   ├── 签名计算（如需要）
-  ├── 构造请求（REST / GraphQL）
+  ├── 构造请求（按探测到的协议：REST / GraphQL / JSON-RPC / 自定义 HTTP）
   ├── 发送请求
   ├── 断言校验（状态码 + 响应时间分级阈值 + 响应体）
   ├── 提取变量
