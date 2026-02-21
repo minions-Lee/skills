@@ -184,8 +184,9 @@
       "bases:新建数据库": false
     }
   },
-  "active": "90c2920d3621d8e4",
+  "active": "6bd200f3e79fdcfc",
   "lastOpenFiles": [
+    "rss-daily-digest/generate_summary.py",
     "github-kb/skills/github-kb/install-gh.sh",
     "github-kb/skills/github-kb/init-repos.sh",
     "github-kb/skills/github-kb/SKILL.md",
@@ -204,7 +205,6 @@
     "prd-taskmaster/companion-skills",
     "find-skill/tests/openclaw-paths.test.ts",
     "rss-daily-digest/data/sum_batch_3.json",
-    "rss-daily-digest/data/sum_batch_2.json",
     "distilling-methodology-poems/wei-qing-examples.md",
     "distilling-methodology-poems/SKILL.md",
     "rss-daily-digest/node_modules/undici/lib/web/subresource-integrity/Readme.md",

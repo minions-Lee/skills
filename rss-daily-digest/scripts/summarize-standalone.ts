@@ -33,30 +33,44 @@ async function callClaude(
   model: string,
   messages: ClaudeMessage[],
   systemPrompt: string,
+  retries = 3,
 ): Promise<string> {
   const baseUrl = (process.env.ANTHROPIC_BASE_URL ?? "https://api.anthropic.com").replace(/\/$/, "")
-  const response = await fetch(`${baseUrl}/v1/messages`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 8192,
-      system: systemPrompt,
-      messages,
-    }),
-  })
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(`${baseUrl}/v1/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 8192,
+          system: systemPrompt,
+          messages,
+        }),
+      })
 
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Claude API error: ${response.status} ${errorText}`)
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`Claude API error: ${response.status} ${errorText}`)
+      }
+
+      const result = (await response.json()) as ClaudeResponse
+      return result.content[0]?.text ?? ""
+    } catch (err) {
+      if (attempt < retries) {
+        const waitMs = 5000 * attempt
+        console.error(`  callClaude attempt ${attempt} failed, retrying in ${waitMs}ms: ${(err as Error).message}`)
+        await new Promise(r => setTimeout(r, waitMs))
+      } else {
+        throw err
+      }
+    }
   }
-
-  const result = (await response.json()) as ClaudeResponse
-  return result.content[0]?.text ?? ""
+  throw new Error("callClaude exhausted retries")
 }
 
 const SYSTEM_PROMPT = `你是一个 AI 资讯摘要助手。你的任务是：
@@ -64,6 +78,10 @@ const SYSTEM_PROMPT = `你是一个 AI 资讯摘要助手。你的任务是：
 2. 保留英文专有名词（如 Claude、GPT-4、Transformer、LLM）
 3. 从所有条目中选出最有价值的内容作为 Smart Recommendations
 4. Smart Recommendations 应该是重大产品发布、有影响力的研究、深度分析或重要的开源项目
+
+重要格式规则：
+- 摘要文本中禁止使用双引号（"），如需引用请用「」或【】代替
+- 严格输出合法 JSON，不得有未转义的特殊字符
 
 请严格按照指定的 JSON 格式输出。`
 
@@ -114,8 +132,27 @@ ${itemsText}
     }))
   }
 
-  const jsonStr = jsonMatch[1] || jsonMatch[0]!
-  const parsed = JSON.parse(jsonStr) as Array<{ index: number; summary: string; isSmartPick: boolean }>
+  const jsonStr = (jsonMatch[1] || jsonMatch[0]!)
+    // Replace curly/smart quotes that break JSON parsing
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/[\u2018\u2019]/g, "'")
+
+  let parsed: Array<{ index: number; summary: string; isSmartPick: boolean }>
+  try {
+    parsed = JSON.parse(jsonStr)
+  } catch (e) {
+    console.error(`JSON parse error in batch ${batchIndex}, falling back to raw titles`)
+    return items.map(item => ({
+      title: item.title,
+      link: item.link,
+      source: item.feedName,
+      categoryId: item.categoryId,
+      categoryName: item.categoryName,
+      pubDate: item.pubDate,
+      summary: item.description?.slice(0, 200) || item.title,
+      isSmartPick: false,
+    }))
+  }
 
   return parsed.map(p => {
     const item = items[p.index]!
@@ -162,8 +199,22 @@ async function main() {
   const allItems: SummarizedItem[] = []
   for (let i = 0; i < batches.length; i++) {
     console.log(`  Batch ${i + 1}/${batches.length}...`)
-    const items = await summarizeBatch(batches[i]!, i, batches.length, apiKey, settings)
-    allItems.push(...items)
+    try {
+      const items = await summarizeBatch(batches[i]!, i, batches.length, apiKey, settings)
+      allItems.push(...items)
+    } catch (err) {
+      console.error(`  Batch ${i + 1} failed, using raw titles: ${(err as Error).message}`)
+      allItems.push(...batches[i]!.map(item => ({
+        title: item.title,
+        link: item.link,
+        source: item.feedName,
+        categoryId: item.categoryId,
+        categoryName: item.categoryName,
+        pubDate: item.pubDate,
+        summary: item.description?.slice(0, 200) || item.title,
+        isSmartPick: false,
+      })))
+    }
   }
 
   // Select top Smart Picks

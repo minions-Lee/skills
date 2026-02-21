@@ -128,6 +128,7 @@ function generateReport(data: ReportData): string {
   lines.push(`total_items: ${data.totalItems}`)
   lines.push(`smart_picks: ${data.smartPicks.length}`)
   lines.push(`has_summaries: ${data.hasSummaries}`)
+  lines.push(`generated_at: ${new Date().toISOString()}`)
   lines.push("---")
   lines.push("")
 
@@ -244,7 +245,17 @@ function main() {
   mkdirSync(archiveDir, { recursive: true })
 
   const filename = settings.output.filenamePattern.replace("YYYY-MM-DD", data.date)
-  const outputPath = resolve(archiveDir, filename)
+  let outputPath = resolve(archiveDir, filename)
+
+  // If main digest for today already exists and not forcing → use timestamp suffix
+  const force = process.argv.includes("--force")
+  if (!force && existsSync(outputPath)) {
+    const hhmm = new Date().toTimeString().slice(0, 5).replace(":", "")
+    const base = filename.replace("-ai-digest.md", "")
+    const updateFilename = `${base}-${hhmm}-update.md`
+    outputPath = resolve(archiveDir, updateFilename)
+    console.log(`Today's digest already exists. Writing incremental update: ${updateFilename}`)
+  }
 
   writeFileSync(outputPath, report, "utf-8")
   console.log(`Report written: ${outputPath}`)

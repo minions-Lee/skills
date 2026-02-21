@@ -20,14 +20,22 @@ cd "$SKILL_DIR"
 # Allow claude CLI to run even if invoked from within a Claude Code session
 unset CLAUDECODE 2>/dev/null || true
 
+# Parse --force flag
+FORCE_FLAG=""
+for arg in "$@"; do
+  [ "$arg" = "--force" ] && FORCE_FLAG="--force"
+done
+
 run_step() {
   local step="$1"
   local script="$2"
+  local extra_args="${3:-}"
   echo ""
   echo "═══════════════════════════════════════"
   echo "  [$step] $(date '+%H:%M:%S')"
   echo "═══════════════════════════════════════"
-  npx tsx "scripts/$script"
+  # shellcheck disable=SC2086
+  npx tsx "scripts/$script" $extra_args
 }
 
 case "${1:-help}" in
@@ -41,7 +49,7 @@ case "${1:-help}" in
     run_step "Dedupe & Filter" "dedupe-filter.ts"
     ;;
   format)
-    run_step "Format Report" "format-report.ts"
+    run_step "Format Report" "format-report.ts" "$FORCE_FLAG"
     ;;
   notify)
     run_step "DingTalk Notify" "notify-dingtalk.ts"
@@ -63,6 +71,25 @@ case "${1:-help}" in
 
     run_step "1/6 Parse Feeds" "parse-feeds.ts"
     run_step "2/6 Fetch Feeds" "fetch-feeds.ts"
+
+    if [ -n "$FORCE_FLAG" ]; then
+      echo ""
+      echo "  [--force] Clearing today's seen-guids for full re-run..."
+      node --input-type=commonjs <<'EOF'
+const fs = require('fs');
+const path = require('path');
+const guidPath = path.join(process.cwd(), 'data/seen-guids.json');
+const today = new Date().toISOString().slice(0, 10);
+const guids = JSON.parse(fs.readFileSync(guidPath, 'utf-8'));
+let count = 0;
+for (const [k, v] of Object.entries(guids)) {
+  if (v.startsWith(today)) { delete guids[k]; count++; }
+}
+fs.writeFileSync(guidPath, JSON.stringify(guids, null, 2));
+console.log('  Cleared ' + count + " today's seen-guids");
+EOF
+    fi
+
     run_step "3/6 Dedupe & Filter" "dedupe-filter.ts"
 
     echo ""
@@ -72,7 +99,7 @@ case "${1:-help}" in
     (cd "$ARCHIVE_DIR" && claude -p "$(cat "$SKILL_DIR/scripts/summarize-prompt.md")" \
       --allowedTools "Read,Write,Task,Bash,Glob,Grep")
 
-    run_step "5/6 Format Report" "format-report.ts"
+    run_step "5/6 Format Report" "format-report.ts" "$FORCE_FLAG"
     run_step "6/6 DingTalk Notify" "notify-dingtalk.ts"
 
     END_TIME=$(date +%s)
