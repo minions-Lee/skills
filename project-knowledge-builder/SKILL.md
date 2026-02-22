@@ -83,13 +83,13 @@ wiki/
 **第三轮：已有知识库（精确路径）**
 
 ```
-PROJECT_KNOWLEDGE/README.md
-PROJECT_KNOWLEDGE/architecture.md
-PROJECT_KNOWLEDGE/data-model.md
-PROJECT_KNOWLEDGE/modules/*.md
-PROJECT_KNOWLEDGE/ai-guide.md
-PROJECT_KNOWLEDGE/open-questions.md
-.project-knowledge/questionnaire-*/
+project_knowledge/README.md
+project_knowledge/architecture.md
+project_knowledge/data-model.md
+project_knowledge/modules/*.md
+project_knowledge/ai-guide.md
+project_knowledge/open-questions.md
+project_knowledge/questionnaires/*/
 ```
 
 **第四轮：API 文档（精确文件名）**
@@ -134,7 +134,7 @@ copilot-instructions.md
   README.md                        项目介绍 + 启动方式         将纳入知识库
   docs/architecture.md             架构说明                    将纳入知识库
   CLAUDE.md                        AI 开发规则                 作为知识库基础
-  PROJECT_KNOWLEDGE/               已有知识库（6 文件）        进入增量模式
+  project_knowledge/               已有知识库（6 文件）        进入增量模式
   swagger.json                     42 个 API 定义              不再出接口相关问题
 
   未发现：CHANGELOG、CI/CD 配置、wiki 目录
@@ -254,7 +254,7 @@ L6 边缘 ─→ 最后扫描，标记技术债
 
 ### 问卷结构
 
-问卷按模块拆分为多个文件（与知识库 `modules/` 对应），放在 `.project-knowledge/questionnaire-v{N}/` 目录下。
+问卷按模块拆分为多个文件（与知识库 `modules/` 对应），放在 `project_knowledge/questionnaires/v{N}/` 目录下。
 
 每个问卷文件头部统一格式：
 
@@ -281,7 +281,7 @@ L6 边缘 ─→ 最后扫描，标记技术债
 
 ### 3.2 知识库生成
 
-按问卷对应的维度，将答案写入 `PROJECT_KNOWLEDGE/` 目录中的对应文件：
+按问卷对应的维度，将答案写入 `project_knowledge/` 目录中的对应文件：
 
 - `global.md` 的答案 → 写入 `README.md`、`architecture.md`、`data-model.md` 等全局文件
 - `{module}.md` 的答案 → 写入 `modules/{module}.md`
@@ -331,13 +331,13 @@ L6 边缘 ─→ 最后扫描，标记技术债
 ### 增量流程
 
 ```
-读取 PROJECT_KNOWLEDGE/ 下所有文件
+读取 project_knowledge/ 下所有文件
   ↓
 扫描代码变更（git diff 或全量重扫）
   ↓
 排除已覆盖的知识点
   ↓
-只针对新增模糊点生成增量问卷（.project-knowledge/questionnaire-v{N+1}/）
+只针对新增模糊点生成增量问卷（project_knowledge/questionnaires/v{N+1}/）
   ↓
 合并答案到已有文件（保留原有 🟢 条目），新增模块则创建新的 modules/*.md
 ```
@@ -346,30 +346,29 @@ L6 边缘 ─→ 最后扫描，标记技术债
 
 ## 文件输出约定
 
-### 知识库目录结构
+### 目录结构
 
 ```
 {项目根目录}/
-├── PROJECT_KNOWLEDGE/                       # 知识库目录（与 README.md 同级）
-│   ├── README.md                            # 索引：项目概述 + 文件导航 + 覆盖度统计
-│   ├── architecture.md                      # 技术架构、技术栈、架构决策
-│   ├── data-model.md                        # 实体关系、枚举速查表、状态机
-│   ├── integrations.md                      # 第三方服务、MQ、定时任务、缓存
-│   ├── permissions.md                       # 角色定义、权限矩阵、鉴权流程
-│   ├── ai-guide.md                          # AI 开发规则、踩坑清单、命名约定
-│   ├── open-questions.md                    # 未解决的问题
-│   └── modules/                             # 业务模块（每模块一文件）
-│       ├── user.md
-│       ├── order.md
-│       └── payment.md
-│
-└── .project-knowledge/                      # 工作目录（问卷等中间产物）
-    ├── questionnaire-v1/                    # 第 1 次问卷（按模块拆分）
-    │   ├── global.md                        # 全局 + 架构问题
-    │   ├── user.md                          # 用户模块问题
-    │   └── order.md                         # 订单模块问题
-    └── questionnaire-v2/                    # 第 2 次增量问卷
-        └── ...
+└── project_knowledge/
+    ├── README.md                        # 索引：项目概述 + 文件导航 + 覆盖度统计
+    ├── architecture.md                  # 技术架构、技术栈、架构决策
+    ├── data-model.md                    # 实体关系、枚举速查表、状态机
+    ├── integrations.md                  # 第三方服务、MQ、定时任务、缓存
+    ├── permissions.md                   # 角色定义、权限矩阵、鉴权流程
+    ├── ai-guide.md                      # AI 开发规则、踩坑清单、命名约定
+    ├── open-questions.md                # 未解决的问题
+    ├── modules/                         # 业务模块知识（每模块一文件）
+    │   ├── user.md
+    │   ├── order.md
+    │   └── payment.md
+    └── questionnaires/                  # 问卷（按版本 + 模块拆分）
+        ├── v1/
+        │   ├── global.md               # 全局 + 架构问题
+        │   ├── user.md                 # 用户模块问题
+        │   └── order.md               # 订单模块问题
+        └── v2/
+            └── ...
 ```
 
 ### 拆分原则
@@ -386,11 +385,10 @@ L6 边缘 ─→ 最后扫描，标记技术债
 
 核心思路：**全局性内容在顶层，业务细节按模块拆到 `modules/`**。开发某个模块时只需加载 `README.md` + `architecture.md` + `modules/{module}.md`。
 
-**问卷**也按模块拆分：
+**问卷**也按模块拆分，放在 `questionnaires/v{N}/` 下：
 
-- 每次问卷是一个目录 `questionnaire-v{N}/`
 - 全局/架构问题放 `global.md`
-- 各业务模块的问题各自一个文件
+- 各业务模块各自一个文件（与 `modules/` 对应）
 - 好处：可以把不同模块的问卷分发给不同的人回答
 
 ### 文件按需创建
@@ -423,13 +421,13 @@ L6 边缘 ─→ 最后扫描，标记技术债
 
 ## 启动流程
 
-1. 检查项目根目录是否已有 `PROJECT_KNOWLEDGE/` → 有则进入增量模式
+1. 检查项目根目录是否已有 `project_knowledge/` → 有则进入增量模式
 2. 确认扫描范围（全项目 / 指定模块）
 3. 执行 Phase 0 → Phase 1 → Phase 2
 4. 输出问卷，引导用户：
 
 ```
-问卷已生成：.project-knowledge/questionnaire-v1/
+问卷已生成：project_knowledge/questionnaires/v1/
   ├── global.md     (8 题)
   ├── user.md       (6 题)
   ├── order.md      (10 题)
@@ -438,7 +436,7 @@ L6 边缘 ─→ 最后扫描，标记技术债
 可将不同模块的问卷分发给对应负责人。填完后告诉我"问卷填好了"。
 ```
 
-5. 用户回复后执行 Phase 3，生成/更新 `PROJECT_KNOWLEDGE/` 目录
+5. 用户回复后执行 Phase 3，生成/更新 `project_knowledge/` 目录
 6. 提议将 `ai-guide.md` 中的核心规则集成到 CLAUDE.md
 
 ---

@@ -3,7 +3,7 @@
 ## 目录结构
 
 ```
-PROJECT_KNOWLEDGE/
+project_knowledge/
 ├── README.md                # 索引文件：项目概述 + 导航 + 置信度统计
 ├── architecture.md          # 技术架构：技术栈、项目结构、架构决策
 ├── data-model.md            # 全局数据模型：实体关系图、枚举速查表
