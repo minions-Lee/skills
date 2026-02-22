@@ -83,9 +83,13 @@ wiki/
 **第三轮：已有知识库（精确路径）**
 
 ```
-PROJECT_KNOWLEDGE.md
-.project-knowledge/open-questions.md
-.project-knowledge/questionnaire-*-answered.md
+PROJECT_KNOWLEDGE/README.md
+PROJECT_KNOWLEDGE/architecture.md
+PROJECT_KNOWLEDGE/data-model.md
+PROJECT_KNOWLEDGE/modules/*.md
+PROJECT_KNOWLEDGE/ai-guide.md
+PROJECT_KNOWLEDGE/open-questions.md
+.project-knowledge/questionnaire-*/
 ```
 
 **第四轮：API 文档（精确文件名）**
@@ -130,7 +134,7 @@ copilot-instructions.md
   README.md                        项目介绍 + 启动方式         将纳入知识库
   docs/architecture.md             架构说明                    将纳入知识库
   CLAUDE.md                        AI 开发规则                 作为知识库基础
-  PROJECT_KNOWLEDGE.md             已有知识库 v1               进入增量模式
+  PROJECT_KNOWLEDGE/               已有知识库（6 文件）        进入增量模式
   swagger.json                     42 个 API 定义              不再出接口相关问题
 
   未发现：CHANGELOG、CI/CD 配置、wiki 目录
@@ -222,50 +226,13 @@ L6 边缘 ─→ 最后扫描，标记技术债
 
 **比例不固定**——根据扫描发现的模糊点类型自然决定。状态/枚举多则选择题多，流程复杂则描述题多。
 
-### 问题格式示例
+### 问题格式要求
 
-**选择题**：
-```markdown
-### Q1. [订单模块] `order.status = 3` 的业务含义？
+每个问题必须包含：**标题**（`[模块名] + 问题`）、**代码位置**（文件:行号）、**上下文**（代码片段或 AI 观察）。
 
-**代码位置**：`com/example/order/OrderService.java:142`
-**上下文**：
-​```java
-if (order.getStatus() == 3) {
-    refundService.process(order);
-}
-​```
-**选项**：
-- [ ] A. 已取消（用户主动取消）
-- [ ] B. 退款中（退款流程进行中）
-- [ ] C. 已退款（退款已完成）
-- [ ] D. 其他：___________
-```
-
-**描述题**：
-```markdown
-### Q5. [支付模块] 请描述完整的支付流程
-
-**代码位置**：`com/example/payment/PaymentService.java`
-**AI 观察到的流程**：
-1. 用户提交支付请求 → 创建记录 (status=0) → 调用第三方 API
-2. ❓ 支付回调处理逻辑不完整
-3. ❓ 超时如何处理？
-
-**请补充/纠正**：___________
-```
-
-**确认题**：
-```markdown
-### Q8. [用户模块] User 和 Member 是否指同一实体？
-
-**AI 分析**：User 在登录模块（t_user），Member 在会员模块（t_member），通过 user_id 关联。
-推测 User = 基础账号，Member = 会员扩展。
-
-- [ ] A. 正确
-- [ ] B. 部分正确，补充：___________
-- [ ] C. 不正确，实际是：___________
-```
+- **选择题**：选项互斥，必含"其他：___"兜底
+- **描述题**：先展示 AI 观察到的部分，标出 ❓ 不确定处，请人补充/纠正
+- **确认题**：展示 AI 分析，提供 "正确 / 部分正确，补充 / 不正确，实际是" 三个选项
 
 ### 问题优先级
 
@@ -287,25 +254,15 @@ if (order.getStatus() == 3) {
 
 ### 问卷结构
 
+问卷按模块拆分为多个文件（与知识库 `modules/` 对应），放在 `.project-knowledge/questionnaire-v{N}/` 目录下。
+
+每个问卷文件头部统一格式：
+
 ```markdown
-# {项目名称} — 项目知识问卷
+# {项目名称} — {模块名/全局} 知识问卷
 
-> 生成时间：YYYY-MM-DD | 项目类型：{type}
-> 扫描范围：{全项目/指定模块} | 问题总数：N 题
-> 预计填写：约 M 分钟
-
-## 填写说明
-1. 选择题在选项前打 [x]
-2. 描述题尽量详细
-3. 不确定的标注"不确定"
-4. AI 分析有误请直接纠正
-
-## 一、项目全局
-## 二、架构与技术
-## 三、{核心业务模块 A}
-## 四、{核心业务模块 B}
-## 五、数据与状态
-## 六、遗留问题
+> 版本：v1 | 生成时间：YYYY-MM-DD | 问题数：N 题
+> 填写说明：选择题打 [x]，描述题尽量详细，不确定标注"不确定"，AI 分析有误直接纠正
 ```
 
 ---
@@ -324,11 +281,14 @@ if (order.getStatus() == 3) {
 
 ### 3.2 知识库生成
 
-根据项目特征选用章节，不生硬套用全部模板。章节模板详见 [references/knowledge-base-template.md](references/knowledge-base-template.md)。
+按问卷对应的维度，将答案写入 `PROJECT_KNOWLEDGE/` 目录中的对应文件：
 
-**必选章节**：项目概述、技术架构、核心业务流程、AI 开发指南、开放问题。
+- `global.md` 的答案 → 写入 `README.md`、`architecture.md`、`data-model.md` 等全局文件
+- `{module}.md` 的答案 → 写入 `modules/{module}.md`
+- 跨模块的规则 → 写入 `ai-guide.md`
+- 未解决的问题 → 写入 `open-questions.md`
 
-**按需选用**：领域模型（有数据库时）、状态机与枚举（有状态字段时）、外部集成（有第三方调用时）、权限与安全（有权限体系时）。
+文件按需创建，不生硬套用全部模板。各文件模板详见 [references/knowledge-base-template.md](references/knowledge-base-template.md)。
 
 ### 3.3 置信度标记
 
@@ -371,68 +331,115 @@ if (order.getStatus() == 3) {
 ### 增量流程
 
 ```
-读取已有知识库
+读取 PROJECT_KNOWLEDGE/ 下所有文件
   ↓
 扫描代码变更（git diff 或全量重扫）
   ↓
 排除已覆盖的知识点
   ↓
-只针对新增模糊点生成问卷
+只针对新增模糊点生成增量问卷（.project-knowledge/questionnaire-v{N+1}/）
   ↓
-合并答案到已有知识库（保留原有 🟢 条目）
+合并答案到已有文件（保留原有 🟢 条目），新增模块则创建新的 modules/*.md
 ```
 
 ---
 
 ## 文件输出约定
 
-### 文件布局
+### 知识库目录结构
 
 ```
 {项目根目录}/
-├── PROJECT_KNOWLEDGE.md                     # 知识库主文档（固定位置，持续更新）
-└── .project-knowledge/                      # 工作目录（问卷、中间产物）
-    ├── questionnaire-v1.md                  # 第 1 次问卷
-    ├── questionnaire-v1-answered.md         # 第 1 次问卷（人工填写后）
-    ├── questionnaire-v2.md                  # 第 2 次增量问卷
-    ├── questionnaire-v2-answered.md         # 第 2 次增量问卷（人工填写后）
-    └── open-questions.md                    # 开放问题汇总
+├── PROJECT_KNOWLEDGE/                       # 知识库目录（与 README.md 同级）
+│   ├── README.md                            # 索引：项目概述 + 文件导航 + 覆盖度统计
+│   ├── architecture.md                      # 技术架构、技术栈、架构决策
+│   ├── data-model.md                        # 实体关系、枚举速查表、状态机
+│   ├── integrations.md                      # 第三方服务、MQ、定时任务、缓存
+│   ├── permissions.md                       # 角色定义、权限矩阵、鉴权流程
+│   ├── ai-guide.md                          # AI 开发规则、踩坑清单、命名约定
+│   ├── open-questions.md                    # 未解决的问题
+│   └── modules/                             # 业务模块（每模块一文件）
+│       ├── user.md
+│       ├── order.md
+│       └── payment.md
+│
+└── .project-knowledge/                      # 工作目录（问卷等中间产物）
+    ├── questionnaire-v1/                    # 第 1 次问卷（按模块拆分）
+    │   ├── global.md                        # 全局 + 架构问题
+    │   ├── user.md                          # 用户模块问题
+    │   └── order.md                         # 订单模块问题
+    └── questionnaire-v2/                    # 第 2 次增量问卷
+        └── ...
 ```
 
-### 规则
+### 拆分原则
 
-| 文件 | 位置 | 说明 |
-|------|------|------|
-| `PROJECT_KNOWLEDGE.md` | 项目根目录 | 知识库唯一主文档，所有知识合成到这一个文件。与 `README.md`、`CLAUDE.md` 同级，一目了然 |
-| `.project-knowledge/` | 项目根目录 | 问卷和中间产物目录。以 `.` 开头，不污染项目主目录 |
-| 问卷文件 | `.project-knowledge/` 内 | 带版本号 `v1`、`v2`...，每次生成递增 |
-| 回答后的问卷 | `.project-knowledge/` 内 | 人工另存为 `*-answered.md`，或直接在原文件上填写 |
-| 开放问题 | `.project-knowledge/` 内 | 未解决的问题单独维护 |
+**知识库**按两个维度拆分文件：
 
-### 知识库主文档（PROJECT_KNOWLEDGE.md）
+| 维度 | 文件 | 增长特征 |
+|------|------|---------|
+| 宏观/全局 | `README.md`、`architecture.md` | 稳定，低频更新 |
+| 全局数据 | `data-model.md`、`integrations.md`、`permissions.md` | 随集成/实体增加 |
+| **业务细节** | `modules/{module}.md` | **主要增长点**，一个模块一个文件 |
+| 实操 | `ai-guide.md` | 随经验积累 |
+| 动态 | `open-questions.md` | 先增后减 |
 
-- **不分版本**，每次合成时原地更新
-- **不拆分文件**，所有模块的知识集中在一个文档中
-- 已有则增量更新（保留 🟢 条目，合并新内容）
-- 没有则自动创建
+核心思路：**全局性内容在顶层，业务细节按模块拆到 `modules/`**。开发某个模块时只需加载 `README.md` + `architecture.md` + `modules/{module}.md`。
+
+**问卷**也按模块拆分：
+
+- 每次问卷是一个目录 `questionnaire-v{N}/`
+- 全局/架构问题放 `global.md`
+- 各业务模块的问题各自一个文件
+- 好处：可以把不同模块的问卷分发给不同的人回答
+
+### 文件按需创建
+
+| 文件 | 创建条件 |
+|------|---------|
+| `README.md` | 始终创建 |
+| `architecture.md` | 始终创建 |
+| `modules/*.md` | 始终创建（至少一个模块） |
+| `ai-guide.md` | 始终创建 |
+| `open-questions.md` | 有未解决问题时 |
+| `data-model.md` | 有数据库 / ORM 时 |
+| `integrations.md` | 有第三方调用 / MQ / 定时任务时 |
+| `permissions.md` | 有权限/角色体系时 |
+
+### 模块文件命名
+
+模块文件名取自扫描发现的模块名（小写，短横线分隔）：
+
+| 扫描发现 | 文件名 |
+|---------|--------|
+| `UserController` / `routes/user.ts` / `user/` 包 | `modules/user.md` |
+| `OrderController` / `routes/order.ts` | `modules/order.md` |
+| `PaymentService`（独立模块） | `modules/payment.md` |
+| `管理后台`（admin 相关路由） | `modules/admin.md` |
+
+各文件的详细模板见 [references/knowledge-base-template.md](references/knowledge-base-template.md)。
 
 ---
 
 ## 启动流程
 
-1. 检查是否已有知识库 → 有则进入增量模式
+1. 检查项目根目录是否已有 `PROJECT_KNOWLEDGE/` → 有则进入增量模式
 2. 确认扫描范围（全项目 / 指定模块）
 3. 执行 Phase 0 → Phase 1 → Phase 2
 4. 输出问卷，引导用户：
 
 ```
-问卷已生成：.project-knowledge/questionnaire-v1.md
-📋 共 N 题 | ⏱ 预计 M 分钟
-请交给了解项目的人填写，完成后告诉我"问卷填好了"。
+问卷已生成：.project-knowledge/questionnaire-v1/
+  ├── global.md     (8 题)
+  ├── user.md       (6 题)
+  ├── order.md      (10 题)
+  └── payment.md    (4 题)
+📋 共 28 题 | ⏱ 预计 20 分钟
+可将不同模块的问卷分发给对应负责人。填完后告诉我"问卷填好了"。
 ```
 
-5. 用户回复后执行 Phase 3，输出知识库
-6. 提议集成到 CLAUDE.md
+5. 用户回复后执行 Phase 3，生成/更新 `PROJECT_KNOWLEDGE/` 目录
+6. 提议将 `ai-guide.md` 中的核心规则集成到 CLAUDE.md
 
 ---
 
