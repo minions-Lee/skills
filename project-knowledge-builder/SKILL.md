@@ -83,9 +83,9 @@ wiki/
 **第三轮：已有知识库（精确路径）**
 
 ```
-docs/knowledge/knowledge-base.md
-docs/knowledge/open-questions.md
-docs/knowledge/questionnaire-*-answered.md
+PROJECT_KNOWLEDGE.md
+.project-knowledge/open-questions.md
+.project-knowledge/questionnaire-*-answered.md
 ```
 
 **第四轮：API 文档（精确文件名）**
@@ -130,7 +130,7 @@ copilot-instructions.md
   README.md                        项目介绍 + 启动方式         将纳入知识库
   docs/architecture.md             架构说明                    将纳入知识库
   CLAUDE.md                        AI 开发规则                 作为知识库基础
-  docs/knowledge/knowledge-base.md 已有知识库 v1               进入增量模式
+  PROJECT_KNOWLEDGE.md             已有知识库 v1               进入增量模式
   swagger.json                     42 个 API 定义              不再出接口相关问题
 
   未发现：CHANGELOG、CI/CD 配置、wiki 目录
@@ -386,33 +386,35 @@ if (order.getStatus() == 3) {
 
 ## 文件输出约定
 
-### 输出根目录选择
-
-按以下优先级确定输出位置（首个匹配即使用）：
-
-| 优先级 | 条件 | 输出根目录 |
-|--------|------|-----------|
-| 1 | 用户在触发时指定了路径 | 用户指定的路径 |
-| 2 | 项目已有 `docs/knowledge/` 目录 | `{项目根}/docs/knowledge/` |
-| 3 | 项目已有 `docs/` 目录 | `{项目根}/docs/knowledge/`（自动创建 knowledge 子目录） |
-| 4 | 以上都不存在 | `{项目根}/docs/knowledge/`（自动创建完整路径） |
-
-### 文件命名规范
+### 文件布局
 
 ```
-{输出根目录}/
-├── questionnaire-v1.md              # 第 1 次问卷
-├── questionnaire-v1-answered.md     # 第 1 次问卷（人工填写后）
-├── questionnaire-v2.md              # 第 2 次增量问卷
-├── questionnaire-v2-answered.md     # 第 2 次增量问卷（人工填写后）
-├── knowledge-base.md                # 知识库主文档（持续更新，不分版本）
-└── open-questions.md                # 开放问题汇总（持续更新）
+{项目根目录}/
+├── PROJECT_KNOWLEDGE.md                     # 知识库主文档（固定位置，持续更新）
+└── .project-knowledge/                      # 工作目录（问卷、中间产物）
+    ├── questionnaire-v1.md                  # 第 1 次问卷
+    ├── questionnaire-v1-answered.md         # 第 1 次问卷（人工填写后）
+    ├── questionnaire-v2.md                  # 第 2 次增量问卷
+    ├── questionnaire-v2-answered.md         # 第 2 次增量问卷（人工填写后）
+    └── open-questions.md                    # 开放问题汇总
 ```
 
-**版本号规则**：
-- 问卷文件带版本号 `v1`、`v2`、`v3`...，每次生成新问卷递增
-- 知识库和开放问题不带版本号，每次合成时原地更新
-- 回答后的问卷由人工另存为 `*-answered.md`，或直接在原文件上填写
+### 规则
+
+| 文件 | 位置 | 说明 |
+|------|------|------|
+| `PROJECT_KNOWLEDGE.md` | 项目根目录 | 知识库唯一主文档，所有知识合成到这一个文件。与 `README.md`、`CLAUDE.md` 同级，一目了然 |
+| `.project-knowledge/` | 项目根目录 | 问卷和中间产物目录。以 `.` 开头，不污染项目主目录 |
+| 问卷文件 | `.project-knowledge/` 内 | 带版本号 `v1`、`v2`...，每次生成递增 |
+| 回答后的问卷 | `.project-knowledge/` 内 | 人工另存为 `*-answered.md`，或直接在原文件上填写 |
+| 开放问题 | `.project-knowledge/` 内 | 未解决的问题单独维护 |
+
+### 知识库主文档（PROJECT_KNOWLEDGE.md）
+
+- **不分版本**，每次合成时原地更新
+- **不拆分文件**，所有模块的知识集中在一个文档中
+- 已有则增量更新（保留 🟢 条目，合并新内容）
+- 没有则自动创建
 
 ---
 
@@ -424,7 +426,7 @@ if (order.getStatus() == 3) {
 4. 输出问卷，引导用户：
 
 ```
-问卷已生成：docs/knowledge/questionnaire-v1.md
+问卷已生成：.project-knowledge/questionnaire-v1.md
 📋 共 N 题 | ⏱ 预计 M 分钟
 请交给了解项目的人填写，完成后告诉我"问卷填好了"。
 ```
