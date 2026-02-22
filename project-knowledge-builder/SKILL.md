@@ -55,24 +55,93 @@ Phase 3: 知识合成 → 输出知识库 → 与开发流程集成
 
 **在动手扫描之前，先看项目已有什么。** 避免问出"文档里已经写了"的问题。
 
-### 扫描清单
+### 扫描路径规范
 
-| 扫描目标 | 常见位置 | 提取内容 |
-|---------|---------|---------|
-| README | `README.md`、`README` | 项目定位、启动方式、技术栈 |
-| Wiki / 文档站 | `docs/`、`wiki/`、`.github/` | 架构说明、业务流程 |
-| API 文档 | `swagger.json`、`openapi.yaml`、`docs/api/` | 接口定义 |
-| 内联注释 | 代码中的 Javadoc / JSDoc / docstring | 方法级说明 |
-| 变更日志 | `CHANGELOG.md`、`HISTORY.md` | 功能演进历史 |
-| 已有知识库 | `docs/knowledge/knowledge-base.md` | 之前的知识积累 |
-| CI/CD 配置 | `.github/workflows/`、`Jenkinsfile`、`.gitlab-ci.yml` | 部署流程 |
-| CLAUDE.md | `CLAUDE.md`、`.claude/` | 已有的 AI 指令 |
+以项目根目录为基准，按以下**固定路径**依次扫描（存在则读取，不存在则跳过）：
+
+**第一轮：项目根目录文件**
+
+```
+README.md
+README
+CLAUDE.md
+CHANGELOG.md
+HISTORY.md
+CONTRIBUTING.md
+ARCHITECTURE.md
+```
+
+**第二轮：文档目录（递归扫描 `*.md` `*.txt` `*.rst`）**
+
+```
+docs/
+doc/
+wiki/
+.github/
+```
+
+**第三轮：已有知识库（精确路径）**
+
+```
+docs/knowledge/knowledge-base.md
+docs/knowledge/open-questions.md
+docs/knowledge/questionnaire-*-answered.md
+```
+
+**第四轮：API 文档（精确文件名）**
+
+```
+swagger.json
+swagger.yaml
+openapi.json
+openapi.yaml
+docs/api/**/*.{json,yaml,yml}
+```
+
+**第五轮：CI/CD 配置**
+
+```
+.github/workflows/*.yml
+Jenkinsfile
+.gitlab-ci.yml
+.circleci/config.yml
+docker-compose*.yml
+Dockerfile
+```
+
+**第六轮：AI 配置**
+
+```
+.claude/
+.cursorrules
+.cursor/rules/
+copilot-instructions.md
+```
+
+### 扫描结果输出
+
+扫描完成后输出发现清单，让用户确认：
+
+```
+📄 已有文档发现：
+
+  文件                              内容摘要                    状态
+  ─────────────────────────────────────────────────────────────
+  README.md                        项目介绍 + 启动方式         将纳入知识库
+  docs/architecture.md             架构说明                    将纳入知识库
+  CLAUDE.md                        AI 开发规则                 作为知识库基础
+  docs/knowledge/knowledge-base.md 已有知识库 v1               进入增量模式
+  swagger.json                     42 个 API 定义              不再出接口相关问题
+
+  未发现：CHANGELOG、CI/CD 配置、wiki 目录
+```
 
 ### 处理规则
 
 - 已有文档覆盖的内容 → **不再出题**，直接纳入知识库（标 🟢）
 - 文档描述与代码不一致 → 出**确认题**让人判断哪个对
 - 有 CLAUDE.md → 读取并作为知识库的基础，增量补全
+- 有已回答的问卷 → 进入增量模式，只补充未覆盖的部分
 
 ---
 
@@ -317,14 +386,33 @@ if (order.getStatus() == 3) {
 
 ## 文件输出约定
 
+### 输出根目录选择
+
+按以下优先级确定输出位置（首个匹配即使用）：
+
+| 优先级 | 条件 | 输出根目录 |
+|--------|------|-----------|
+| 1 | 用户在触发时指定了路径 | 用户指定的路径 |
+| 2 | 项目已有 `docs/knowledge/` 目录 | `{项目根}/docs/knowledge/` |
+| 3 | 项目已有 `docs/` 目录 | `{项目根}/docs/knowledge/`（自动创建 knowledge 子目录） |
+| 4 | 以上都不存在 | `{项目根}/docs/knowledge/`（自动创建完整路径） |
+
+### 文件命名规范
+
 ```
-项目根目录/docs/knowledge/
-├── questionnaire-v1.md          # 问卷
-├── questionnaire-v1-answered.md # 回答后的问卷
-├── questionnaire-v2.md          # 增量问卷
-├── knowledge-base.md            # 知识库（持续更新）
-└── open-questions.md            # 开放问题
+{输出根目录}/
+├── questionnaire-v1.md              # 第 1 次问卷
+├── questionnaire-v1-answered.md     # 第 1 次问卷（人工填写后）
+├── questionnaire-v2.md              # 第 2 次增量问卷
+├── questionnaire-v2-answered.md     # 第 2 次增量问卷（人工填写后）
+├── knowledge-base.md                # 知识库主文档（持续更新，不分版本）
+└── open-questions.md                # 开放问题汇总（持续更新）
 ```
+
+**版本号规则**：
+- 问卷文件带版本号 `v1`、`v2`、`v3`...，每次生成新问卷递增
+- 知识库和开放问题不带版本号，每次合成时原地更新
+- 回答后的问卷由人工另存为 `*-answered.md`，或直接在原文件上填写
 
 ---
 
